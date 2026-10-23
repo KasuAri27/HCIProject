@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>学习助手</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/katex/katex.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+  <!-- 顶栏：品牌 / 当前资料 / AI 状态 / 全局操作 -->
+  <header class="topbar">
+    <button type="button" id="btn-rail-toggle" class="icon-btn" title="显示或隐藏资料柜" aria-label="资料柜">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 3.5h13v9h-13z"/><path d="M1.5 6.5h13M6 6.5v6"/></svg>
+    </button>
+    <span class="brand">学习助手</span>
+    <span class="crumb" id="topbar-crumb" hidden></span>
+    <span class="grow"></span>
+    <button type="button" id="btn-import" class="btn btn-primary" title="导入 Markdown、TXT、DOCX 或文本型 PDF">导入资料</button>
+    <input id="import-input" type="file" accept=".md,.markdown,.txt,.docx,.pdf" multiple hidden>
+    <button type="button" id="btn-annot-toggle" class="icon-btn annot-toggle" title="显示或隐藏批注栏" aria-label="批注栏">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>批注
+    </button>
+    <button type="button" id="llm-status" class="pill pill-warn" title="配置 AI 接口">AI 未配置</button>
+    <button type="button" id="btn-refresh-library" class="btn" title="重新扫描 library/ 目录">刷新资料</button>
+    <button type="button" id="btn-config" class="btn" title="配置 AI 接口">API 设置</button>
+    <button type="button" id="btn-reset" class="btn btn-quiet" title="清空学习记录，保留资料与 API 配置">重置</button>
+  </header>
+
+  <div class="job-strip" id="job-strip" hidden></div>
+
+  <div class="workbench" id="workbench">
+
+    <!-- 左栏：资料柜 -->
+    <aside class="rail rail-left" id="rail-left" aria-label="资料柜">
+      <div class="rail-head">
+        <h2 class="rail-title">资料柜<span class="badge" id="library-count">0</span></h2>
+      </div>
+      <div class="rail-search">
+        <input id="library-search" type="search" placeholder="搜索资料名或路径" autocomplete="off" spellcheck="false" aria-label="搜索资料">
+      </div>
+      <div class="rail-alert" id="library-alert" hidden></div>
+      <div class="rail-body" id="library-tree">
+        <p class="empty">正在扫描资料库…</p>
+      </div>
+      <div class="rail-foot">
+        <div class="foot-row"><span>已读</span><span id="read-ratio">0 / 0</span></div>
+        <div class="foot-bar"><i id="read-bar"></i></div>
+        <div class="foot-row foot-muted"><span>笔记</span><span id="note-count">0</span></div>
+        <div class="foot-row foot-muted"><span>做过题</span><span id="exercise-count">0</span></div>
+      </div>
+    </aside>
+
+    <div class="gutter" id="gutter-left" role="separator" aria-orientation="vertical" tabindex="0" title="拖动调整资料柜宽度"></div>
+
+    <!-- 中栏：纸面 -->
+    <main class="reading" id="reading">
+      <div class="doc-head" id="doc-head" hidden>
+        <div class="doc-head-main">
+          <h1 class="doc-title" id="doc-title"></h1>
+          <p class="doc-call" id="doc-call" title="资料在 library/ 中的位置"></p>
+        </div>
+        <div class="doc-head-side">
+          <span class="version-chip" id="doc-version" hidden></span>
+          <a id="doc-original" class="btn btn-small" download hidden title="下载保留的原始文件，不在页面里展示源码">下载原文件</a>
+          <button type="button" id="btn-prereq" class="btn btn-small" disabled
+            title="可选：让 AI 根据这份资料出几道阅读前的基础自评">前置自评</button>
+        </div>
+        <div class="doc-progress" aria-hidden="true"><i id="doc-progress-bar"></i></div>
+      </div>
+
+      <div class="doc-scroll" id="doc-scroll">
+        <div class="doc-empty" id="doc-empty"></div>
+        <article class="doc-page" id="doc-page" hidden>
+          <div class="doc-body markdown" id="doc-body"></div>
+        </article>
+      </div>
+    </main>
+
+    <div class="gutter" id="gutter-right" role="separator" aria-orientation="vertical" tabindex="0" title="拖动调整批注栏宽度"></div>
+
+    <!-- 右栏：批注 -->
+    <aside class="rail rail-right" id="rail-right" aria-label="批注栏">
+
+      <!-- 划段气泡：停靠在批注栏顶部 -->
+      <div class="bubble" id="select-bubble" hidden>
+        <div class="bubble-head">
+          <span class="bubble-title">你划选的这段</span>
+          <button type="button" class="bubble-close" id="select-bubble-close" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <blockquote class="bubble-quote" id="select-bubble-quote"></blockquote>
+        <textarea id="select-bubble-input" rows="2" spellcheck="false" placeholder="想问什么？留空就是「讲这段」"></textarea>
+        <div class="bubble-actions">
+          <button type="button" id="btn-spot-ask" class="btn btn-small btn-primary">现场问</button>
+          <button type="button" id="btn-throw-chat" class="btn btn-small">放进对话</button>
+          <button type="button" id="btn-quote-note" class="btn btn-small btn-quiet">记进笔记</button>
+          <button type="button" id="btn-highlight" class="btn btn-small btn-quiet">高亮</button>
+        </div>
+        <div class="bubble-answer markdown" id="select-bubble-answer" hidden></div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="批注">
+        <button type="button" role="tab" id="tab-chat" class="tab is-active" data-pane="pane-chat" aria-selected="true" aria-controls="pane-chat">对话<span class="tab-badge" id="badge-chat" hidden></span></button>
+        <button type="button" role="tab" id="tab-annotations" class="tab" data-pane="pane-annotations" aria-selected="false" aria-controls="pane-annotations">标注<span class="tab-badge" id="badge-annotations" hidden></span></button>
+        <button type="button" role="tab" id="tab-notes" class="tab" data-pane="pane-notes" aria-selected="false" aria-controls="pane-notes">笔记<span class="tab-dot" id="dot-notes" hidden></span></button>
+        <button type="button" role="tab" id="tab-exercise" class="tab" data-pane="pane-exercise" aria-selected="false" aria-controls="pane-exercise">练习<span class="tab-dot" id="dot-exercise" hidden></span></button>
+        <button type="button" role="tab" id="tab-review" class="tab" data-pane="pane-review" aria-selected="false" aria-controls="pane-review">复盘<span class="tab-dot" id="dot-review" hidden></span></button>
+        <span class="tab-ink" id="tab-ink" aria-hidden="true"></span>
+      </div>
+
+      <!-- 标注 -->
+      <section class="pane" id="pane-annotations" role="tabpanel" aria-labelledby="tab-annotations" hidden>
+        <div class="pane-bar">
+          <span class="field-label" style="margin:0">高亮与批注</span>
+          <span class="annot-count" id="annot-count"></span>
+        </div>
+        <div class="pane-scroll" id="annotations-list">
+          <p class="empty">在正文里选中一段文字，点「高亮」，这里会出现标注。</p>
+        </div>
+      </section>
+
+      <!-- 对话 -->
+      <section class="pane is-active" id="pane-chat" role="tabpanel" aria-labelledby="tab-chat">
+        <div class="pane-scroll" id="chat-messages">
+          <p class="empty">打开一份资料后，这里可以就它提问。</p>
+        </div>
+        <div class="composer">
+          <textarea id="chat-input" rows="2" spellcheck="false" placeholder="就这份资料提问，可以不划段"></textarea>
+          <button type="button" id="btn-chat-send" class="btn btn-primary" disabled>发送</button>
+        </div>
+      </section>
+
+      <!-- 笔记 -->
+      <section class="pane" id="pane-notes" role="tabpanel" aria-labelledby="tab-notes" hidden>
+        <div class="pane-bar">
+          <span class="save-state" id="notes-save-status"></span>
+          <button type="button" id="btn-notes-save" class="btn btn-small" disabled>保存笔记</button>
+        </div>
+        <div class="pane-scroll">
+          <p class="empty" id="notes-empty">打开一份资料后，这里写你自己的笔记。</p>
+          <div id="notes-layout" hidden>
+            <textarea id="notes-content" class="notes-area" spellcheck="false"
+              placeholder="你的笔记。AI 不会自动改这里。"></textarea>
+
+            <div class="notes-ai">
+              <label class="field-label" for="notes-instruction">让 AI 帮写点什么（可选）</label>
+              <textarea id="notes-instruction" rows="2" spellcheck="false"
+                placeholder="例如：把划选整理成三条要点"></textarea>
+              <button type="button" id="btn-notes-draft" class="btn btn-small" disabled>生成草稿</button>
+            </div>
+
+            <div class="draft" id="notes-draft-wrap" hidden>
+              <p class="draft-head">草稿预览，还没写进笔记</p>
+              <div class="draft-body markdown" id="notes-draft-body"></div>
+              <label class="draft-replace">
+                <input type="checkbox" id="notes-draft-replace"> 替换全文（不勾就追加到末尾）
+              </label>
+              <div class="draft-actions">
+                <button type="button" id="btn-notes-draft-apply" class="btn btn-small btn-primary">写进笔记</button>
+                <button type="button" id="btn-notes-draft-discard" class="btn btn-small btn-quiet">丢掉</button>
+              </div>
+            </div>
+
+            <div class="suggest">
+              <div class="suggest-head">
+                <span>AI 建议</span>
+                <button type="button" id="btn-notes-refresh-suggest" class="btn btn-small btn-quiet" disabled>换一批</button>
+              </div>
+              <div class="suggest-list" id="notes-suggestions-list">
+                <p class="empty">配置 API 后，切到笔记页会自动给建议。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 练习 -->
+      <section class="pane" id="pane-exercise" role="tabpanel" aria-labelledby="tab-exercise" hidden>
+        <div class="pane-bar">
+          <label class="field-inline" for="exercise-difficulty">难度
+            <select id="exercise-difficulty">
+              <option value="">默认</option>
+              <option value="入门">入门</option>
+              <option value="中等">中等</option>
+              <option value="进阶">进阶</option>
+            </select>
+          </label>
+          <button type="button" id="btn-exercise" class="btn btn-small" disabled>出题</button>
+        </div>
+        <div class="pane-scroll">
+          <div class="question markdown" id="exercise-question">
+            <p class="empty">打开一份资料后可以出题。</p>
+          </div>
+          <div class="answer">
+            <label class="field-label" for="code-editor">你的解答</label>
+            <textarea id="code-editor" class="code-area" spellcheck="false"
+              placeholder="代码题写代码，理论题写推导或简答"></textarea>
+            <button type="button" id="btn-submit" class="btn btn-primary" disabled>提交批改</button>
+          </div>
+          <div class="review markdown" id="exercise-review"></div>
+          <button type="button" id="btn-exercise-next" class="btn btn-small" hidden>再来一题</button>
+        </div>
+      </section>
+
+      <!-- 复盘 -->
+      <section class="pane" id="pane-review" role="tabpanel" aria-labelledby="tab-review" hidden>
+        <div class="pane-scroll markdown" id="last-review">
+          <p class="empty">提交解答后，这里显示你的解答和 AI 批改。</p>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- 通用确认 -->
+  <div class="modal-mask" id="confirm-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+      <h3 id="confirm-modal-title">确认</h3>
+      <p id="confirm-modal-body"></p>
+      <div class="modal-actions">
+        <button type="button" id="btn-confirm-cancel" class="btn btn-quiet">取消</button>
+        <button type="button" id="btn-confirm-ok" class="btn btn-primary">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- API 设置 -->
+  <div class="modal-mask" id="config-modal" hidden>
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="config-title">
+      <h3 id="config-title">API 设置</h3>
+      <p class="modal-lead">填 OpenAI 兼容接口。不填也能读资料、写笔记；填了才有对话、出题、批改和笔记建议。</p>
+      <label class="field" for="cfg-api-base">接口地址
+        <input id="cfg-api-base" type="text" placeholder="https://api.deepseek.com" spellcheck="false">
+      </label>
+      <label class="field" for="cfg-api-key">API Key
+        <input id="cfg-api-key" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false">
+        <span class="field-hint" id="cfg-key-hint">密钥只存在本机，页面不会回显完整内容</span>
+      </label>
+      <label class="field-check" id="cfg-clear-wrap" hidden>
+        <input type="checkbox" id="cfg-clear-key"> 清除已保存的 API Key
+      </label>
+      <label class="field" for="cfg-model">模型
+        <input id="cfg-model" type="text" placeholder="deepseek-v4-flash" spellcheck="false">
+      </label>
+      <div class="field-row">
+        <label class="field" for="cfg-timeout">超时（秒）
+          <input id="cfg-timeout" type="number" value="180" min="1">
+        </label>
+        <label class="field" for="cfg-temperature">温度（0～2）
+          <input id="cfg-temperature" type="number" value="0.7" step="0.1" min="0" max="2">
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-config-default" class="btn btn-quiet">恢复默认</button>
+        <span class="grow"></span>
+        <button type="button" id="btn-config-cancel" class="btn btn-quiet">取消</button>
+        <button type="button" id="btn-config-save" class="btn btn-primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 前置自评 -->
+  <div class="modal-mask" id="prereq-modal" hidden>
+    <div class="modal modal-tall" role="dialog" aria-modal="true" aria-labelledby="prereq-title">
+      <h3 id="prereq-title">阅读前的基础自评</h3>
+      <p class="prereq-focus" id="prereq-focus"></p>
+      <p class="modal-lead">这一步是可选的，跳过不影响阅读。</p>
+      <div class="prereq-list" id="prereq-questions"></div>
+      <div class="prereq-none" id="prereq-empty" hidden>
+        <p>这份资料不需要补前置，直接读就行。</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="btn-prereq-skip" class="btn btn-quiet">跳过</button>
+        <span class="grow"></span>
+        <button type="button" id="btn-prereq-submit" class="btn btn-primary">提交</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="{{ url_for('static', filename='vendor/katex/katex.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='vendor/katex/auto-render.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

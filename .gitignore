@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+.venv/
+.ruff_cache/
+build/
+dist/
+
+db/api_config.json
+db/progress.json
+db/chapter_chats.json
+db/chapter_notes.json
+db/prereq.json
+db/guide_image_cache/
+db/learning.db
+db/learning.db-*
+db/originals/
+db/backups/
+.uitest/
+
+# 用户资料与本地工具产物
+library/*
+!library/.gitkeep
+.qoder-credits/
+.pytest_cache/
+Thumbs.db
+.DS_Store
