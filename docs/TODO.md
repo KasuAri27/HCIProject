@@ -16,7 +16,7 @@
 - 资料入口为 `library/`，当前支持 `.md/.markdown/.txt`，导入 UI 留到第二阶段。
 - 旧 SQLite 课程库、AIInfraGuide 映射、入学问卷与学习规划已移除；旧设计文档移至 `docs/legacy/`。
 - 回归测试：`python -m unittest discover -s tests -v`（16 项）。
-- 打包暂缓，spec 已移除旧课程资源；后续开发继续以 WebUI 为主。
+- 打包暂缓，原打包配置已移除；后续需要分发时再重建 PyInstaller 配置。
 
 ## 第二阶段：资料导入（2026-10-22 完成）
 
