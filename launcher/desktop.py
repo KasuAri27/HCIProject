@@ -3,16 +3,19 @@
 使用 pywebview 将 Flask 学习页面装入原生桌面窗口（不再依赖浏览器），
 双击打包后的 exe 即可启动。
 
-源码运行：python desktop.py
-打包入口：PyInstaller 以本文件为入口构建独立 exe。
+源码运行：python launcher/desktop.py。
 
-注意：网页启动方式仍保留（start.bat / launcher.py）。
+注意：网页启动方式仍保留（launcher/start.bat 或 launcher/launcher.py）。
 """
 
 import json
+import sys
 import threading
 import time
 import urllib.request
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import webview
 

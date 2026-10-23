@@ -25,7 +25,7 @@ node --check app/static/app.js
 涉及 UI 的改动还应实际打开页面验证：
 
 ```bash
-python launcher.py
+python launcher/launcher.py
 ```
 
 重点检查导入、阅读、标注、位置恢复、笔记保存和无 API 状态。涉及数据层的改动要确认：

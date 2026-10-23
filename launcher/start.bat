@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
 where python >nul 2>nul
 if errorlevel 1 (
@@ -9,4 +9,4 @@ if errorlevel 1 (
     exit /b 1
 )
 
-python launcher.py
+python "launcher\launcher.py"

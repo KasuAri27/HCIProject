@@ -1,7 +1,7 @@
 """学习助手 本地启动器。
 
 用法：
-- 双击项目根目录的 start.bat，或在命令行运行 python launcher.py。
+- 双击 launcher/start.bat，或在项目根目录运行 python launcher/launcher.py。
 
 功能：
 1. 若学习服务已在运行，直接打开浏览器，不重复启动；
@@ -12,9 +12,13 @@
 """
 
 import json
+import sys
 import threading
 import urllib.request
 import webbrowser
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app import web
 

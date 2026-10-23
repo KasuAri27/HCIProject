@@ -1,10 +1,10 @@
 # 架构文档：本地资料学习工作台
 
-> **状态说明（2026-10-22）**：本文档是第一阶段基线。第二阶段已经实现资料导入、统一文档/版本/章节/内容块、规范化 Markdown 预览、SQLite 学习数据、后台解析、标注与阅读位置；当前运行方式、数据目录和限制以 [README.md](../README.md) 与 [TODO.md](../TODO.md) 为准。下文“不依赖 SQLite / 只支持 Markdown/TXT”等描述属于第一阶段历史。
+> **状态说明（2026-10-22）**：本文档是第一阶段基线。第二阶段已经实现资料导入、统一文档/版本/章节/内容块、规范化 Markdown 预览、SQLite 学习数据、后台解析、标注与阅读位置；当前运行方式、数据目录和限制以 [README.md](../README.md) 与 [TODO.md](TODO.md) 为准。下文“不依赖 SQLite / 只支持 Markdown/TXT”等描述属于第一阶段历史。
 
 > 版本：2026-10-20（第一阶段）  
 > 范围：`D:\HCIProject` 当前代码  
-> 关联：[README.md](../README.md)、[TODO.md](../TODO.md)
+> 关联：[README.md](../README.md)、[TODO.md](TODO.md)
 
 ---
 
@@ -77,10 +77,10 @@ AIInfraGuide、GitHub Pages 插图回源、SQLite 课程库均不再是运行依
 
 | 形态 | 入口 | 说明 |
 |---|---|---|
-| 浏览器模式 | `python launcher.py` / `start.bat` | 启动 Flask，打开默认浏览器 |
+| 浏览器模式 | `python launcher/launcher.py` / `launcher/start.bat` | 启动 Flask，打开默认浏览器 |
 | 直接启动 | `python -m app.web` / `python -m app.cli serve` | 默认 `127.0.0.1:5000` |
-| 桌面模式（可选） | `python desktop.py` | pywebview 原生窗口 |
-| 冻结 exe（暂缓） | `AIInfra学习助手.spec` | 已移除旧课程资源，后续再验证 |
+| 桌面模式（可选） | `python launcher/desktop.py` | pywebview 原生窗口 |
+| 冻结 exe（暂缓） | 打包配置暂未保留 | 后续需要分发时再重建 |
 
 ### 3.2 启动自检
 
@@ -481,7 +481,7 @@ db/api_config.json  >  LLM_* 环境变量  >  默认值
 
 ```bash
 pip install -r requirements.txt
-python launcher.py
+python launcher/launcher.py
 ```
 
 无需数据库初始化，无需 AIInfraGuide。
@@ -499,8 +499,8 @@ python launcher.py
 
 ### 10.2 桌面/打包
 
-- `python desktop.py` 仍可用；启动器会先做健康检查；
-- `AIInfra学习助手.spec` 已移除 `AIInfraGuide/` 与 `db/ai_infra.db` 资源，只收集模板、静态文件和 pywebview 依赖；
+- `python launcher/desktop.py` 仍可用；启动器会先做健康检查；
+- 打包配置暂未保留；需要分发时再补 PyInstaller 配置并验证 WebView2 与用户数据目录；
 - 打包暂不验收，后续需验证 PyInstaller、WebView2、资料库路径、用户数据目录与杀毒软件误报。
 
 ### 10.3 备份
@@ -619,9 +619,9 @@ db/
 ├── prereq.json
 tests/test_phase1.py
 docs/ARCHITECTURE.md
-docs/legacy/{question.md,学习辅助.md}
+docs/legacy/学习辅助.md
 README.md
-TODO.md
+docs/TODO.md
 ```
 
 没有 `db/schema.sql`、`db/init_db.py`、`db/verify.py`、`app/db.py`、`app/planner.py`、`app/profile.py`、`app/memory.py`。

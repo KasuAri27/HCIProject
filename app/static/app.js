@@ -177,7 +177,7 @@ async function api(path, options = {}) {
   try {
     resp = await fetch(path, options);
   } catch (e) {
-    throw new Error("无法连接后端服务，请先运行 python launcher.py");
+    throw new Error("无法连接后端服务，请先运行 python launcher/launcher.py");
   }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(data.error || `请求失败（HTTP ${resp.status}）`);
