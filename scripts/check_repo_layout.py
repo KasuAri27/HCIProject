@@ -17,6 +17,8 @@ ROOT_ALLOWED = {
     "README.md",
     "requirements.txt",
     "requirements-dev.txt",
+    "ruff.toml",
+    "pyproject.toml",
 }
 
 FORBIDDEN_PREFIXES = (
