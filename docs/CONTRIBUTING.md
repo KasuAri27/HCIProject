@@ -9,17 +9,19 @@
 - 修复分支：`fix/<scope>-<short-desc>`，例如 `fix/reader-position`。
 - 文档/工程：`docs/<short-desc>`、`chore/<short-desc>`。
 - 一个提交只做一件逻辑上的事，不要把重构、功能和格式化混在一起。
-- 小改动可以在本地直接提交到 `main`；涉及多文件功能或协议变化的改动建议开 PR。
+- `main` 已开启分支保护：改动通过 PR 合并，PR 必须通过 `checks` 与 `commit-messages` 两个检查。
 - 推送前先同步远程：`git pull --rebase origin main`；不要对 `main` 使用 force push。
 
 ## 2. 提交前检查
 
-在提交前至少运行：
+在提交前至少运行（测试依赖见 `requirements-dev.txt`）：
 
 ```bash
+python scripts/check_repo_layout.py
+python -m ruff check app tests scripts
 python -m unittest discover -s tests -v
-python -m ruff check app tests
 node --check app/static/app.js
+python scripts/check_commit_messages.py --message "feat(import): 支持 DOCX 导入"
 ```
 
 涉及 UI 的改动还应实际打开页面验证：
@@ -60,6 +62,7 @@ python launcher/launcher.py
 | `chore` | 构建、依赖、仓库初始化、杂务 |
 | `build` | 打包或构建配置 |
 | `ci` | CI 配置 |
+| `revert` | 回退已有提交 |
 
 ### scope
 
@@ -121,3 +124,25 @@ chore: 初始化仓库
 - PR 描述至少包含：改动目的、主要改动、验证方式、已知限制。
 - UI 改动建议附截图或操作路径；数据层改动附迁移/回滚说明。
 - 合并后删除已合并的功能分支；不要重写已推送的 `main` 历史。
+
+## 7. CI 流水线
+
+`.github/workflows/ci.yml` 在 push 到 `main` 和所有 PR 上运行两个 job：
+
+| job | 检查内容 |
+|---|---|
+| `checks` | 仓库布局、`ruff`、`unittest`、`node --check` |
+| `commit-messages` | 范围内每条提交信息的格式 |
+
+本地预跑与 CI 等价：
+
+```bash
+pip install -r requirements-dev.txt
+python scripts/check_repo_layout.py
+python -m ruff check app tests scripts
+python -m unittest discover -s tests -v
+node --check app/static/app.js
+python scripts/check_commit_messages.py --range origin/main..HEAD
+```
+
+合并/自动 revert 提交会被跳过；其余提交必须满足第 3 节的格式。`main` 的分支保护要求这两个检查通过才能合并。紧急情况下可以临时在仓库 Settings → Branches 里放宽保护，但不要把不合规的提交直接推上 `main`。

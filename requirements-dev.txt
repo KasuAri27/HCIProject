@@ -1,0 +1,6 @@
+# 本地与 CI 的测试依赖（不含桌面壳 pywebview）
+flask>=3.1
+python-docx>=1.1
+pypdf>=5.0
+reportlab>=4.0
+ruff>=0.6

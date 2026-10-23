@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装测试依赖
+        run: pip install -r requirements-dev.txt
+
+      - name: 仓库布局检查
+        run: python scripts/check_repo_layout.py
+
+      - name: 代码检查
+        run: python -m ruff check app tests scripts
+
+      - name: 单元测试
+        run: python -m unittest discover -s tests -v
+
+      - name: 前端语法检查
+        run: node --check app/static/app.js
+
+  commit-messages:
+    name: commit-messages
+    runs-on: ubuntu-latest
+    env:
+      BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.after || github.sha }}
+    steps:
+      - name: 检出完整历史
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 拉取比较基准
+        if: ${{ env.BASE_SHA != '' && env.BASE_SHA != '0000000000000000000000000000000000000000' }}
+        run: git fetch --no-tags origin "$BASE_SHA" || true
+
+      - name: 检查提交信息
+        run: python scripts/check_commit_messages.py
