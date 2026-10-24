@@ -597,3 +597,223 @@ body.sheet-page {
     animation: none;
   }
 }
+
+/* ---------- 用户页：读者档案 ---------- */
+.user-ledger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 48px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--page-accent);
+}
+.plate-label {
+  margin-bottom: 10px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.user-plate h1 {
+  font-family: var(--font-doc);
+  font-size: clamp(42px, 5vw, 64px);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.plate-goal {
+  max-width: 36ch;
+  margin-top: 14px;
+  font-family: var(--font-doc);
+  font-size: 17px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.plate-note {
+  margin-top: 18px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.user-form {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  padding-left: 32px;
+  border-left: 1px solid var(--rule);
+}
+.user-form .pbtn {
+  justify-self: start;
+  margin-top: 2px;
+}
+.stat-ledger {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.stat-cell {
+  padding: 22px 0 20px 22px;
+  border-left: 1px solid var(--rule-soft);
+}
+.stat-cell:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.stat-value {
+  display: block;
+  font-family: var(--font-doc);
+  font-size: 38px;
+  line-height: 1;
+}
+.stat-label {
+  display: block;
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.service-section {
+  margin-top: 48px;
+}
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--ink);
+}
+.section-head h2 {
+  font-family: var(--font-doc);
+  font-size: 30px;
+  font-weight: 600;
+}
+.section-head .section-note {
+  max-width: 52ch;
+  margin-top: 6px;
+}
+.text-link {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--page-accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--page-accent);
+}
+.text-link:hover {
+  color: var(--accent-2);
+}
+.service-list {
+  margin-top: 4px;
+}
+.service-row {
+  border-bottom: 1px solid var(--rule-soft);
+}
+.service-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 0;
+}
+.service-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.service-main h3 {
+  flex-shrink: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.service-meta {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.service-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.service-actions .text-btn {
+  white-space: nowrap;
+}
+.service-state {
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.service-state.is-ok {
+  color: var(--ok);
+}
+.service-state.is-warn {
+  color: var(--warn);
+}
+.service-edit {
+  display: grid;
+  grid-template-columns: 1.5fr 1.5fr auto auto;
+  align-items: end;
+  gap: 16px;
+  padding: 0 0 16px 15px;
+}
+.service-edit .field input {
+  font-size: 12.5px;
+}
+.subhead {
+  margin-top: 34px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.page-footnote {
+  margin-top: 48px;
+  padding-top: 16px;
+  font-size: 12px;
+  color: var(--ink-3);
+  border-top: 1px solid var(--rule);
+}
+.page-footnote a {
+  color: var(--page-accent);
+}
+
+@media (max-width: 900px) {
+  .user-ledger {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .user-form {
+    padding-top: 20px;
+    padding-left: 0;
+    border-top: 1px solid var(--rule);
+    border-left: 0;
+  }
+  .stat-ledger {
+    grid-template-columns: 1fr 1fr;
+  }
+  .stat-cell {
+    padding-left: 16px;
+  }
+  .stat-cell:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .stat-cell:nth-child(n + 3) {
+    border-top: 1px solid var(--rule-soft);
+  }
+  .section-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .service-line {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .service-actions {
+    flex-wrap: wrap;
+  }
+  .service-edit {
+    grid-template-columns: 1fr;
+    padding-left: 0;
+  }
+}

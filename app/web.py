@@ -5,6 +5,7 @@
 播放，Markdown/TXT 渲染正文。
 """
 
+import json
 import threading
 from pathlib import Path
 
@@ -918,6 +919,35 @@ def api_prereq_answer():
 # ------------------------------------------------------------
 # 配置 / 重置
 # ------------------------------------------------------------
+
+@app.route("/api/profile", methods=["GET", "POST"])
+def api_profile():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        display_name = str(data.get("display_name") or "").strip()
+        goal = str(data.get("goal") or "").strip()
+        if len(display_name) > 40:
+            return jsonify({"error": "称呼不超过 40 个字"}), 400
+        if len(goal) > 200:
+            return jsonify({"error": "学习目标不超过 200 个字"}), 400
+        profile = {"display_name": display_name, "goal": goal}
+        store.set_state("user_profile", json.dumps(profile, ensure_ascii=False))
+        return jsonify({"ok": True, "profile": profile})
+    try:
+        profile = json.loads(store.get_state("user_profile", "{}") or "{}")
+    except (TypeError, ValueError):
+        profile = {}
+    if not isinstance(profile, dict):
+        profile = {}
+    return jsonify(
+        {
+            "profile": {
+                "display_name": str(profile.get("display_name") or ""),
+                "goal": str(profile.get("goal") or ""),
+            }
+        }
+    )
+
 
 @app.route("/api/config", methods=["GET"])
 def api_config_get():

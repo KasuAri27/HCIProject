@@ -406,7 +406,9 @@ document.getElementById("model-add-input").addEventListener("keydown", (event) =
 });
 document.getElementById("custom-form").addEventListener("submit", addCustomProvider);
 
-reloadState().catch((error) => {
+const requestedProvider =
+  new URLSearchParams(window.location.search).get("provider") || "";
+reloadState(requestedProvider).catch((error) => {
   providerEmpty.hidden = false;
   providerEmpty.textContent = `读取配置失败：${error.message}`;
   pageToast(error.message, "err");
