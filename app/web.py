@@ -23,6 +23,7 @@ from . import (
     render,
     source,
     store,
+    tutor,
 )
 
 app = Flask(__name__)
@@ -91,6 +92,7 @@ def _brief(doc: dict | None) -> dict | None:
         "version_no": doc.get("version_no"),
         "version_status": doc.get("version_status") or "",
         "version_error": doc.get("version_error") or "",
+        "read_level": doc.get("read_level") or "",
         "updated_at": doc.get("updated_at") or "",
     }
 
@@ -463,7 +465,11 @@ def api_chat_post():
         return jsonify({"error": err}), 400
     try:
         result = chapter_chat.chat(
-            parsed["doc_id"], parsed["title"], parsed["question"], parsed["quote"]
+            parsed["doc_id"],
+            parsed["title"],
+            parsed["question"],
+            parsed["quote"],
+            parsed["block_id"],
         )
     except (ValueError, llm.LLMError) as exc:
         return _llm_error(exc)
@@ -477,7 +483,11 @@ def api_chat_spot():
         return jsonify({"error": err}), 400
     try:
         result = chapter_chat.spot(
-            parsed["doc_id"], parsed["title"], parsed["question"], parsed["quote"]
+            parsed["doc_id"],
+            parsed["title"],
+            parsed["question"],
+            parsed["quote"],
+            parsed["block_id"],
         )
     except (ValueError, llm.LLMError) as exc:
         return _llm_error(exc)
@@ -536,6 +546,128 @@ def api_notes_draft():
 
 
 # ------------------------------------------------------------
+# 划段 AI 动作 / 理解检查 / 学习证据
+# ------------------------------------------------------------
+
+def _ready_doc(doc_id: str):
+    doc = store.get_document(doc_id)
+    if doc is None:
+        return None, (jsonify({"error": "资料不存在"}), 404)
+    if (doc.get("version_status") or "") != "ready":
+        return None, (jsonify({"error": "资料尚未解析完成"}), 400)
+    return doc, None
+
+
+@app.route("/api/selection/action", methods=["POST"])
+def api_selection_action():
+    data = request.get_json(silent=True) or {}
+    doc_id = (data.get("doc_id") or "").strip()
+    mode = (data.get("mode") or "").strip()
+    quote = (data.get("quote") or "").strip()
+    block_id = (data.get("block_id") or "").strip()
+    question = (data.get("question") or "").strip()
+    if not doc_id:
+        return jsonify({"error": "缺少 doc_id"}), 400
+    if mode not in tutor.MODE_TASKS:
+        return jsonify({"error": "不支持的动作"}), 400
+    if not quote and not question:
+        return jsonify({"error": "缺少划选内容"}), 400
+    doc, error = _ready_doc(doc_id)
+    if error:
+        return error
+    if block_id and store.get_block(doc_id, block_id, doc.get("current_version_id")) is None:
+        return jsonify({"error": "内容块不存在或版本已过期"}), 400
+    try:
+        result = tutor.selection_action(doc_id, mode, quote, block_id, question)
+    except (ValueError, llm.LLMError) as exc:
+        return _llm_error(exc)
+    return jsonify({**result, "doc_id": doc_id})
+
+
+@app.route("/api/understanding", methods=["POST"])
+def api_understanding():
+    data = request.get_json(silent=True) or {}
+    doc_id = (data.get("doc_id") or "").strip()
+    block_id = (data.get("block_id") or "").strip()
+    quote = (data.get("quote") or "").strip()
+    question = (data.get("question") or "").strip()
+    answer = (data.get("answer") or "").strip()
+    if not doc_id:
+        return jsonify({"error": "缺少 doc_id"}), 400
+    if not question or not answer:
+        return jsonify({"error": "检查题和回答都不能为空"}), 400
+    doc, error = _ready_doc(doc_id)
+    if error:
+        return error
+    if block_id and store.get_block(doc_id, block_id, doc.get("current_version_id")) is None:
+        return jsonify({"error": "内容块不存在或版本已过期"}), 400
+    try:
+        result = tutor.evaluate_understanding(doc_id, block_id, quote, question, answer)
+    except (ValueError, llm.LLMError) as exc:
+        return _llm_error(exc)
+    check_id = store.save_understanding(
+        doc_id,
+        doc.get("current_version_id") or "",
+        block_id,
+        quote,
+        question,
+        answer,
+        result["feedback"],
+        result["verdict"],
+    )
+    return jsonify({**result, "id": check_id, "doc_id": doc_id, "self_level": ""})
+
+
+@app.route("/api/understanding/<check_id>", methods=["PATCH"])
+def api_understanding_level(check_id: str):
+    data = request.get_json(silent=True) or {}
+    level = (data.get("self_level") or "").strip()
+    if level not in store.READ_LEVELS:
+        return jsonify({"error": "自评只能是：理解 / 模糊 / 不会"}), 400
+    row = store.set_understanding_self_level(check_id, level)
+    if row is None:
+        return jsonify({"error": "理解检查不存在"}), 404
+    return jsonify({"ok": True, "understanding": row})
+
+
+@app.route("/api/exercise-evidence/<evidence_id>", methods=["PATCH"])
+def api_exercise_evidence_level(evidence_id: str):
+    data = request.get_json(silent=True) or {}
+    level = (data.get("self_level") or "").strip()
+    if level not in store.READ_LEVELS:
+        return jsonify({"error": "自评只能是：理解 / 模糊 / 不会"}), 400
+    row = store.set_exercise_self_level(evidence_id, level)
+    if row is None:
+        return jsonify({"error": "练习记录不存在"}), 404
+    return jsonify({"ok": True, "evidence": row})
+
+
+@app.route("/api/documents/<doc_id>/read-level", methods=["POST"])
+def api_document_read_level(doc_id: str):
+    doc = store.get_document(doc_id)
+    if doc is None:
+        return jsonify({"error": "资料不存在"}), 404
+    data = request.get_json(silent=True) or {}
+    level = (data.get("self_level") or "").strip()
+    if level not in ("", *store.READ_LEVELS):
+        return jsonify({"error": "自评只能是：理解 / 模糊 / 不会"}), 400
+    store.set_read_level(doc_id, level)
+    return jsonify({"ok": True, "read_level": level})
+
+
+@app.route("/api/documents/<doc_id>/learning")
+def api_document_learning(doc_id: str):
+    if store.get_document(doc_id) is None:
+        return jsonify({"error": "资料不存在"}), 404
+    return jsonify(
+        {
+            "understanding": store.list_understanding(doc_id),
+            "practice": store.list_exercise_evidence(doc_id),
+        }
+    )
+
+
+# ------------------------------------------------------------
 # 出题 / 前置自评
 # ------------------------------------------------------------
 
@@ -548,17 +680,13 @@ def api_exercise():
     doc = store.get_document(doc_id)
     if doc is None:
         return jsonify({"error": "资料不存在"}), 404
-    text = store.document_text(doc_id)
-    if not text.strip():
-        return jsonify({"error": "资料尚未解析完成或内容为空"}), 400
     difficulty = (data.get("difficulty") or "").strip()
     if difficulty not in ("", "入门", "中等", "进阶"):
         return jsonify({"error": "难度参数仅支持：入门 / 中等 / 进阶"}), 400
     try:
-        question = explainer.generate_exercise(
+        question, citations = explainer.generate_exercise(
             doc_id,
             source_title=doc.get("title") or "",
-            source_text=text,
             difficulty=difficulty,
             prior_questions=progress.get_exercise_history(doc_id),
             chat_messages=store.get_chat(doc_id),
@@ -568,7 +696,14 @@ def api_exercise():
         return _llm_error(exc)
     progress.set_exercise(doc_id, question, difficulty)
     progress.append_exercise_history(doc_id, question)
-    return jsonify({"question": question, "doc_id": doc_id, "difficulty": difficulty})
+    return jsonify(
+        {
+            "question": question,
+            "citations": citations,
+            "doc_id": doc_id,
+            "difficulty": difficulty,
+        }
+    )
 
 
 @app.route("/api/exercise/submit", methods=["POST"])
@@ -587,21 +722,32 @@ def api_exercise_submit():
     question = (exercise.get("question") or "").strip()
     if not question:
         return jsonify({"error": "请先出题"}), 400
-    text = store.document_text(doc_id)
-    if not text.strip():
-        return jsonify({"error": "资料尚未解析完成或内容为空"}), 400
     try:
-        review = explainer.review_submission(
+        review, citations = explainer.review_submission(
             doc_id,
             source_title=doc.get("title") or "",
-            source_text=text,
             question=question,
             code=answer,
         )
     except (ValueError, llm.LLMError) as exc:
         return _llm_error(exc)
     progress.set_last_submission(doc_id, doc.get("title") or "", question, answer, review)
-    return jsonify({"review": review, "doc_id": doc_id, "title": doc.get("title") or ""})
+    evidence_id = store.add_exercise_evidence(
+        doc_id,
+        doc.get("current_version_id") or "",
+        question,
+        answer,
+        review,
+    )
+    return jsonify(
+        {
+            "review": review,
+            "citations": citations,
+            "evidence_id": evidence_id,
+            "doc_id": doc_id,
+            "title": doc.get("title") or "",
+        }
+    )
 
 
 @app.route("/api/prereq", methods=["GET"])

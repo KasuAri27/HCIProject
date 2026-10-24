@@ -142,7 +142,8 @@ CREATE TABLE IF NOT EXISTS read_records (
     document_id TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
     title       TEXT,
     read_at     TEXT NOT NULL,
-    read_count  INTEGER NOT NULL DEFAULT 1
+    read_count  INTEGER NOT NULL DEFAULT 1,
+    self_level  TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS exercise_state (
@@ -168,6 +169,33 @@ CREATE TABLE IF NOT EXISTS last_submissions (
     review       TEXT,
     submitted_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS understanding_checks (
+    id          TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    version_id  TEXT,
+    block_id    TEXT,
+    quote       TEXT NOT NULL DEFAULT '',
+    question    TEXT NOT NULL,
+    answer      TEXT NOT NULL,
+    feedback    TEXT NOT NULL DEFAULT '',
+    verdict     TEXT NOT NULL DEFAULT '',
+    self_level  TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_understanding_doc ON understanding_checks(document_id, created_at);
+
+CREATE TABLE IF NOT EXISTS exercise_evidence (
+    id          TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    version_id  TEXT,
+    question    TEXT NOT NULL,
+    answer      TEXT NOT NULL,
+    review      TEXT NOT NULL DEFAULT '',
+    self_level  TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_evidence_doc ON exercise_evidence(document_id, created_at);
 
 CREATE TABLE IF NOT EXISTS import_jobs (
     id            TEXT PRIMARY KEY,
@@ -236,8 +264,9 @@ def init_db() -> None:
             conn.executescript(SCHEMA)
             _ensure_column(conn, "document_versions", "markdown", "TEXT")
             _ensure_column(conn, "blocks", "markdown", "TEXT")
+            _ensure_column(conn, "read_records", "self_level", "TEXT NOT NULL DEFAULT ''")
             conn.execute(
-                "INSERT INTO app_state(key, value) VALUES('schema_version', '3') "
+                "INSERT INTO app_state(key, value) VALUES('schema_version', '4') "
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
             )
 
@@ -287,7 +316,8 @@ def get_document(doc_id: str) -> Optional[dict]:
     with _conn() as conn:
         row = conn.execute(
             "SELECT d.*, v.version_no, v.status AS version_status, v.error AS version_error, "
-            "v.parsed_at, v.content_hash, v.source_path AS version_source_path "
+            "v.parsed_at, v.content_hash, v.source_path AS version_source_path, "
+            "(SELECT self_level FROM read_records r WHERE r.document_id = d.id) AS read_level "
             "FROM documents d LEFT JOIN document_versions v ON v.id = d.current_version_id "
             "WHERE d.id = ?",
             (doc_id,),
@@ -304,6 +334,7 @@ def list_document_summaries() -> list[dict]:
             "(SELECT COUNT(*) FROM document_versions vv WHERE vv.document_id = d.id) AS version_count, "
             "(SELECT COUNT(*) FROM notes n WHERE n.document_id = d.id AND trim(n.content) <> '') AS has_note, "
             "(SELECT COUNT(*) FROM read_records r WHERE r.document_id = d.id) AS is_read, "
+            "(SELECT self_level FROM read_records r WHERE r.document_id = d.id) AS read_level, "
             "(SELECT COUNT(*) FROM exercise_history eh WHERE eh.document_id = d.id) AS has_exercise, "
             "(SELECT COUNT(*) FROM annotations a WHERE a.document_id = d.id "
             " AND a.version_id = d.current_version_id) AS annotation_count "
@@ -1010,6 +1041,118 @@ def save_position(
 # 汇总 / 重置
 # ------------------------------------------------------------
 
+READ_LEVELS = ("理解", "模糊", "不会")
+
+
+def set_read_level(doc_id: str, level: str) -> None:
+    """保存阅读后的理解自评（理解 / 模糊 / 不会，空串表示未评）。"""
+    doc = get_document(doc_id)
+    if doc is None:
+        raise ValueError("资料不存在")
+    level = level if level in READ_LEVELS else ""
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO read_records(document_id, title, read_at, read_count, self_level) "
+            "VALUES (?, ?, ?, 0, ?) ON CONFLICT(document_id) DO UPDATE SET "
+            "self_level = excluded.self_level",
+            (doc_id, doc.get("title") or "", _now(), level),
+        )
+
+
+def save_understanding(
+    doc_id: str,
+    version_id: str,
+    block_id: str,
+    quote: str,
+    question: str,
+    answer: str,
+    feedback: str,
+    verdict: str,
+) -> str:
+    check_id = _uid()
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO understanding_checks(id, document_id, version_id, block_id, quote, "
+            "question, answer, feedback, verdict, self_level, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)",
+            (
+                check_id,
+                doc_id,
+                version_id,
+                block_id,
+                quote,
+                question,
+                answer,
+                feedback,
+                verdict,
+                _now(),
+            ),
+        )
+    return check_id
+
+
+def set_understanding_self_level(check_id: str, level: str) -> Optional[dict]:
+    level = level if level in READ_LEVELS else ""
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE understanding_checks SET self_level = ? WHERE id = ?",
+            (level, check_id),
+        )
+        row = conn.execute(
+            "SELECT * FROM understanding_checks WHERE id = ?", (check_id,)
+        ).fetchone()
+    return _dict(row)
+
+
+def list_understanding(doc_id: str) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM understanding_checks WHERE document_id = ? ORDER BY created_at DESC",
+            (doc_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_exercise_evidence(
+    doc_id: str,
+    version_id: str,
+    question: str,
+    answer: str,
+    review: str,
+) -> str:
+    evidence_id = _uid()
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO exercise_evidence(id, document_id, version_id, question, answer, "
+            "review, self_level, created_at) VALUES (?, ?, ?, ?, ?, ?, '', ?)",
+            (evidence_id, doc_id, version_id, question, answer, review, _now()),
+        )
+    return evidence_id
+
+
+def set_exercise_self_level(evidence_id: str, level: str) -> Optional[dict]:
+    level = level if level in READ_LEVELS else ""
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE exercise_evidence SET self_level = ? WHERE id = ?",
+            (level, evidence_id),
+        )
+        row = conn.execute(
+            "SELECT * FROM exercise_evidence WHERE id = ?", (evidence_id,)
+        ).fetchone()
+    return _dict(row)
+
+
+def list_exercise_evidence(doc_id: str) -> list[dict]:
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM exercise_evidence WHERE document_id = ? ORDER BY created_at DESC",
+            (doc_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+
 def overview() -> dict:
     with _conn() as conn:
         document_count = conn.execute("SELECT COUNT(*) AS n FROM documents").fetchone()["n"]
@@ -1020,11 +1163,19 @@ def overview() -> dict:
         exercise_count = conn.execute(
             "SELECT COUNT(DISTINCT document_id) AS n FROM exercise_history"
         ).fetchone()["n"]
+        understanding_count = conn.execute(
+            "SELECT COUNT(*) AS n FROM understanding_checks"
+        ).fetchone()["n"]
+        practice_count = conn.execute(
+            "SELECT COUNT(*) AS n FROM exercise_evidence"
+        ).fetchone()["n"]
     return {
         "document_count": document_count,
         "read_count": read_count,
         "note_count": note_count,
         "exercise_count": exercise_count,
+        "understanding_count": understanding_count,
+        "practice_count": practice_count,
     }
 
 
@@ -1040,6 +1191,8 @@ def reset_learning() -> None:
             "prereq_cache",
             "annotations",
             "reading_positions",
+            "understanding_checks",
+            "exercise_evidence",
         ):
             conn.execute(f"DELETE FROM {table}")
         conn.execute("DELETE FROM app_state WHERE key = 'selected_document_id'")

@@ -1,8 +1,8 @@
 # 架构文档：本地资料学习工作台
 
-> **状态说明（2026-10-22）**：本文档是第一阶段基线。第二阶段已经实现资料导入、统一文档/版本/章节/内容块、规范化 Markdown 预览、SQLite 学习数据、后台解析、标注与阅读位置；当前运行方式、数据目录和限制以 [README.md](../README.md) 与 [TODO.md](TODO.md) 为准。下文“不依赖 SQLite / 只支持 Markdown/TXT”等描述属于第一阶段历史。
+> **状态说明（2026-10-23）**：本文档最初是第一阶段基线。第二、三阶段已在代码中落地：资料导入与统一文档结构、SQLite 学习数据、后台解析、标注与阅读位置，以及统一 AI 上下文与引用校验、划段解释/举例/补前置/理解检查、理解自评与练习证据、笔记撤销/导出、阅读设置与快捷键。当前运行方式、数据目录和限制以 [README.md](../README.md) 与 [TODO.md](TODO.md) 为准；下文明确标注“第一阶段”的描述属于历史基线。
 
-> 版本：2026-10-20（第一阶段）  
+> 版本：2026-10-23（第三阶段）  
 > 范围：`D:\HCIProject` 当前代码  
 > 关联：[README.md](../README.md)、[TODO.md](TODO.md)
 
@@ -99,15 +99,16 @@ AIInfraGuide、GitHub Pages 插图回源、SQLite 课程库均不再是运行依
 |---|---|---|
 | `app/config.py` | 可写根目录、`LIBRARY_DIR`、LLM 环境变量 | 冻结运行时 `APP_DIR` 为 exe 目录；资料库默认在 `APP_DIR/library` |
 | `app/source.py` | 资料扫描、路径校验、读取、Markdown → HTML、资料图片 URL | 只允许 `library/` 内的 `.md/.markdown/.txt`；渲染时转义 HTML 与公式 |
-| `app/text_budget.py` | 统一截断 LLM 资料上下文 | 默认 80,000 字符，保留首尾与选区附近 |
+| `app/ai_context.py` | 统一 AI 上下文构建与引用校验 | 每块带 `[B:<block_id>]` 与来源位置；只保留白名单内 `[cite:<id>]` |
+| `app/tutor.py` | 划段解释/举例/补前置/理解检查与批改 | 四种任务共用同一上下文；批改输出结论行 |
 | `app/llm.py` | OpenAI 兼容 HTTP 客户端、JSON 解析 | 标准库 `urllib`；`LLMError` 统一异常 |
 | `app/api_config.py` | API 配置存储与掩码 | 配置优先级；GET 不返回完整 Key；温度 0 可保存 |
-| `app/progress.py` | 当前资料、已读、题目、出题历史、上次提交 | `rel` 为键；旧课程字段读取时清理 |
-| `app/chapter_chat.py` | 按资料对话、划段现场问 | 正式对话落盘；现场问不落盘 |
+| `app/progress.py` | 当前资料、已读、题目、出题历史、上次提交 | 以 `doc_id` 为键；封装 store |
+| `app/chapter_chat.py` | 按资料对话、划段现场问 | 正式对话落盘；现场问不落盘；带引用 |
 | `app/notes.py` | 按资料笔记、AI 建议/草稿 | 建议/草稿不自动保存；用户确认后写笔记 |
 | `app/prereq.py` | 可选前置自评生成与缓存 | 0～5 题；不影响打开资料；可跳过 |
-| `app/explainer.py` | 出题与批改 | 使用当前资料、出题历史、对话尾部、上次批改 |
-| `app/web.py` | 页面路由与 22 个 JSON/资源路由 | 会话聚合、资料库、对话、笔记、题目、前置题、配置、重置 |
+| `app/explainer.py` | 出题与批改 | 使用统一上下文、出题历史、对话尾部、上次批改 |
+| `app/web.py` | 页面路由与 37 个 JSON/资源路由 | 会话聚合、资料库、标注、AI 动作、学习记录、配置、重置 |
 | `app/cli.py` | `library` / `serve` 命令 | `library` 查看资料库状态 |
 | `app/templates/index.html` | 单页结构 | 四个横向面板 + 配置/前置题/确认浮层 |
 | `app/static/app.js` | 前端状态、API、资料导航、Markdown 渲染 | 无构建步骤；AI 未配置时禁用 AI 按钮但不阻塞阅读 |
@@ -365,24 +366,34 @@ db/api_config.json  >  LLM_* 环境变量  >  默认值
 
 ### 7.2 Prompt 与上下文
 
+所有 AI 功能共用 `ai_context.build_context(doc_id, question, quote, focus_block_id)`：
+
+- 资料量不超过约 60,000 字符时全量放入；超长时取焦点块前后各 7 块、全部标题与关键词命中的块；
+- 每块格式为 `[B:<block_id>] <来源位置>` + 正文，模型只允许引用这些 ID；
+- `clean_citations()` 删除未知或伪造的 `[cite:<id>]`，返回引用条（含来源位置）；
+- 系统规则要求“补充解释”以「补充：」开头，资料未覆盖时明确说明。
+
 | 功能 | 输入 | 输出 | 校验 |
 |---|---|---|---|
-| 资料对话/现场问 | 当前资料截断 + 选区 + 最近 20 条历史 + 问题 | Markdown | 无结构校验 |
-| 出题 | 资料截断 + 已出题摘要（12）+ 最近对话（10）+ 上次批改（2,000 字符）+ 难度 | Markdown | 无 |
-| 批改 | 资料截断 + 题目 + 解答 | Markdown | 无 |
-| 笔记建议 | 资料截断 + 笔记 + 对话摘要 + 批改摘要 + 选区 | JSON `suggestions[]` | 0～5 条、字段规范化 |
+| 资料对话/现场问 | 统一上下文 + 选区 + 最近 20 条历史 + 问题 | Markdown + `[cite]` | 引用白名单 |
+| 划段解释/举例/补前置 | 统一上下文 + 选区 + 任务说明 | Markdown + `[cite]` | 引用白名单 |
+| 划段理解检查 | 统一上下文 + 选区 | 1 道题（无答案） | 引用白名单 |
+| 理解检查批改 | 统一上下文 + 题 + 回答 | 结论行 + 反馈 + `[cite]` | 引用白名单；结论解析 |
+| 出题 | 统一上下文 + 已出题摘要 + 最近对话 + 上次批改 + 难度 | Markdown + `[cite]` | 引用白名单 |
+| 批改 | 统一上下文 + 题目 + 解答 | Markdown + `[cite]` | 引用白名单 |
+| 笔记建议 | 统一上下文 + 笔记 + 对话摘要 + 批改摘要 | JSON `suggestions[]` | 0～5 条、字段规范化 |
 | 笔记草稿 | 同上 + 用户指令 | Markdown | 去最外层围栏 |
-| 前置自评 | 资料截断 | JSON `{focus, questions[]}` | 0～5 题、四档选项、id 重新编号 |
-
-统一截断：`text_budget.truncate_source()`，默认 80,000 字符；超长时保留首 4,000、选区前后各 2,000、尾 4,000。
+| 前置自评 | 统一上下文（带块编号） | JSON `{focus, questions[]}` | 0～5 题、四档选项、id 重新编号 |
 
 ### 7.3 失败处理
 
 - 未配置 Key：读取接口全可用，AI 按钮禁用或提示；
 - 前置题失败：返回 502，但打开资料/笔记/对话仍正常；
+- 划段动作/理解检查失败：气泡内显示错误，阅读与标注不受影响；
 - 出题/批改失败：题目区显示错误，资料阅读不受影响；
 - 笔记建议/草稿失败：显示错误提示，笔记正文不丢；
-- 模型返回非法 JSON：解析失败，不缓存坏结果。
+- 模型返回非法 JSON：解析失败，不缓存坏结果；
+- 模型伪造引用：删除未知 `[cite]`，不阻断回答展示。
 
 ---
 
@@ -578,18 +589,19 @@ node --check app/static/app.js
 
 ---
 
-## 13. 第二阶段影响
+## 13. 第三阶段落地与后续方向
 
-第二阶段（资料导入与统一文档结构）需要在这一版基础上补齐：
+第三阶段在第二阶段基础上补齐学习闭环：
 
-1. **文档目录/元数据**：为每份资料生成稳定 `doc_id`，建立 catalog，`rel` 只作为来源路径；
-2. **导入流水线**：Markdown/TXT/DOCX/文本型 PDF → 统一章节/内容块，保留原文件与来源位置；
-3. **学习数据迁移**：将 JSON 中的进度/对话/笔记/题目迁移到独立 SQLite，提供备份与迁移脚本；
-4. **阅读位置与标注**：按 `doc_id + 内容块` 定位，而不是文件偏移；
-5. **后台任务**：解析进度、失败重试、异常提示；
-6. **资料更新**：版本、引用失效与缓存失效策略。
+1. **统一 AI 上下文**：`ai_context.py` 生成带 block id 的资料摘录，所有 AI 功能共用；模型引用经白名单校验后渲染为可点击“原文”链接；
+2. **划段动作**：解释、举例、补前置、理解检查四个入口共用 `tutor.selection_action()`；
+3. **理解检查**：提交回答后由 AI 批改并保存结论、反馈与自评，写入 `understanding_checks`；
+4. **练习证据**：出题历史之外，每次提交保存题目、解答、批改与自评，写入 `exercise_evidence`；
+5. **笔记**：建议/草稿/引用写入前压入撤销栈，支持一步撤销与 Markdown 导出；
+6. **阅读体验**：字号/行距持久化、专注模式、快捷键帮助、位置保存状态、窄窗口抽屉布局；
+7. **回归测试**：`tests/test_phase3.py` 覆盖上下文/引用、四种动作、理解检查、练习证据、读后自评、记录隔离与前端 DOM 契约。
 
-第一阶段已经把资料读取、AI 上下文、记录隔离和前端交互拆成可替换模块；第二阶段可以优先替换 `source.py` 的资料发现/读取层，而不动对话、笔记和出题模块。
+第四阶段方向见 [TODO.md](TODO.md)：PPTX、扫描 PDF/OCR、图表与公式、跨文档检索、资料更新后的引用与缓存失效，以及真实中文课件验证。
 
 ---
 
@@ -598,41 +610,51 @@ node --check app/static/app.js
 ```text
 app/
 ├── __init__.py
+├── ai_context.py
 ├── api_config.py
 ├── chapter_chat.py
 ├── cli.py
 ├── config.py
 ├── explainer.py
+├── imports.py
 ├── llm.py
+├── migrate.py
 ├── notes.py
+├── parsers.py
 ├── prereq.py
 ├── progress.py
+├── render.py
 ├── source.py
-├── text_budget.py
+├── store.py
+├── tutor.py
 ├── web.py
 ├── templates/index.html
-└── static/{app.js,style.css,miku-deco.png,vendor/katex}
-db/
-├── progress.json
-├── chapter_chats.json
-├── chapter_notes.json
-├── prereq.json
-tests/test_phase1.py
-docs/ARCHITECTURE.md
-docs/legacy/学习辅助.md
-README.md
-docs/TODO.md
+└── static/{app.js,style.css,vendor/katex}
+launcher/
+├── launcher.py
+├── desktop.py
+└── start.bat
+scripts/
+├── check_commit_messages.py
+└── check_repo_layout.py
+tests/
+├── test_phase2.py
+├── test_phase3.py
+└── test_commit_standard.py
+docs/{ARCHITECTURE.md,CONTRIBUTING.md,TODO.md,legacy/}
+.github/workflows/ci.yml
 ```
 
-没有 `db/schema.sql`、`db/init_db.py`、`db/verify.py`、`app/db.py`、`app/planner.py`、`app/profile.py`、`app/memory.py`。
+`db/`、`library/` 与 `.venv/` 属于本地运行数据，不入库。没有旧课程库、AIInfraGuide 映射、问卷或规划模块。
 
 ---
 
 ## 15. 维护约定
 
-- 修改资料路径规则时，同步更新 `source.py`、测试和本文第 4/9 节；
+- 修改资料路径规则时，同步更新 `source.py`、`imports.py`、测试和本文第 4/9 节；
 - 修改 API 时，同步更新第 6 节与 `README.md` 功能表；
-- 修改 AI prompt/截断时，同步更新第 7 节与 `text_budget.py`；
+- 修改 AI prompt/上下文时，同步更新第 7 节、`ai_context.py` 与 `app/__init__.py` 的模块说明；
 - 任何 AI 功能都必须保持“未配置 API 不阻塞阅读”的约束；
-- 第二阶段引入 `doc_id` 时，必须提供旧 `rel` 记录的迁移方案；
+- 引用格式 `[cite:<block_id>]` 只允许由 `clean_citations()` 放行，不要在前端自行信任；
+- 新增学习记录表时，同步更新 `store.reset_learning()` 与统计口径；
 - 打包重新启用前，先补 WebUI E2E 与 PyInstaller 冒烟。

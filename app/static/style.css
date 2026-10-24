@@ -237,6 +237,12 @@ figure {
   background: var(--page);
   border-bottom: 1px solid var(--rule);
 }
+.topbar > .btn,
+.topbar > .icon-btn,
+.topbar > .pill {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .brand {
   font-size: 15px;
   font-weight: 650;
@@ -260,6 +266,21 @@ figure {
   display: grid;
   grid-template-columns: var(--rail-l) var(--gutter) minmax(0, 1fr) var(--gutter) var(--rail-r);
   height: calc(100vh - var(--topbar-h));
+}
+.rail-left {
+  grid-column: 1;
+}
+#gutter-left {
+  grid-column: 2;
+}
+.reading {
+  grid-column: 3;
+}
+#gutter-right {
+  grid-column: 4;
+}
+.rail-right {
+  grid-column: 5;
 }
 
 .rail {
@@ -1513,6 +1534,12 @@ body.has-scrim::after {
   .workbench {
     grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
   }
+  .brand {
+    display: none;
+  }
+  .topbar {
+    gap: 6px;
+  }
   #gutter-right {
     display: none;
   }
@@ -1550,13 +1577,21 @@ body.has-scrim::after {
   }
 }
 
+@media (max-width: 700px) {
+  .topbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .topbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 @media (max-width: 620px) {
   .topbar {
-    gap: 6px;
+    gap: 4px;
     padding: 0 8px;
-  }
-  .brand {
-    display: none;
   }
   .btn {
     padding: 6px 9px;
@@ -1821,4 +1856,159 @@ mark.hl-flash {
   font-size: 13.5px;
   line-height: 1.7;
   color: var(--ink-2);
+}
+
+/* ---------- 第三阶段：AI 引用、理解检查、阅读设置 ---------- */
+:root {
+  --read-font-size: 17px;
+  --read-line-height: 1.85;
+}
+.doc-body.markdown {
+  font-size: var(--read-font-size);
+  line-height: var(--read-line-height);
+}
+.save-hint {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.save-hint.is-saving {
+  color: var(--ink-3);
+}
+.save-hint.is-ok {
+  color: var(--accent);
+}
+.save-hint.is-err {
+  color: var(--danger);
+}
+.doc-block.cite-flash {
+  border-radius: 3px;
+  animation: cite-flash 1.5s ease-out;
+}
+@keyframes cite-flash {
+  0% {
+    background: var(--accent-wash);
+    box-shadow: 0 0 0 3px var(--accent-wash);
+  }
+  100% {
+    background: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.read-level {
+  padding: 3px 5px;
+  font-size: 11px;
+  color: var(--ink-2);
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+.read-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  padding: 8px 28px;
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--panel);
+  border-bottom: 1px solid var(--rule);
+}
+.read-settings label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.read-settings select {
+  padding: 3px 5px;
+  font-size: 12px;
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+.bubble-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.check-box {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--rule);
+}
+.check-box textarea {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 7px 9px;
+  font-size: 13px;
+  line-height: 1.6;
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+.check-feedback {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule-soft);
+}
+.self-rate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.self-rate .btn[data-selected="1"] {
+  color: var(--accent-2);
+  background: var(--accent-wash);
+  border-color: rgba(15, 110, 124, 0.35);
+}
+.pane-actions {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+.cite {
+  display: inline-block;
+  padding: 0 3px;
+  margin-left: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.7em;
+  line-height: 1.35;
+  color: var(--accent);
+  background: var(--accent-wash);
+  border-radius: 2px;
+  text-decoration: none;
+  vertical-align: 0.08em;
+}
+.cite:hover {
+  color: #fff;
+  background: var(--accent);
+}
+.shortcut-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 2;
+  color: var(--ink-2);
+}
+kbd {
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
+body.focus-mode .rail,
+body.focus-mode .gutter {
+  display: none !important;
+}
+body.focus-mode .workbench {
+  grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
 }

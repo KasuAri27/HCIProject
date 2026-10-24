@@ -39,6 +39,17 @@ let jobsPolling = false;
 let positionTimer = null;
 let suppressPositionSave = true;
 
+let notesUndoStack = [];
+let notesUndoTimer = null;
+let notesLastValue = "";
+let checkQuestion = "";
+let checkSelection = null;
+let checkId = "";
+let lastExerciseEvidenceId = "";
+let positionStatusTimer = null;
+let readFontSize = 17;
+let readLineHeight = 1.85;
+
 const FORMAT_LABEL = { md: "MD", txt: "TXT", docx: "DOCX", pdf: "PDF" };
 const DEEPSEEK_DEFAULTS = {
   api_base: "https://api.deepseek.com",
@@ -55,6 +66,10 @@ const $ = (id) => document.getElementById(id);
 
 const btnRailToggle = $("btn-rail-toggle");
 const btnAnnotToggle = $("btn-annot-toggle");
+const btnFocus = $("btn-focus");
+const btnHelp = $("btn-help");
+const helpModal = $("help-modal");
+const btnHelpClose = $("btn-help-close");
 const topbarCrumb = $("topbar-crumb");
 const btnImport = $("btn-import");
 const importInput = $("import-input");
@@ -82,6 +97,14 @@ const docTitle = $("doc-title");
 const docCall = $("doc-call");
 const docVersion = $("doc-version");
 const docOriginal = $("doc-original");
+const positionStatusEl = $("position-status");
+const readLevelSelect = $("read-level");
+const btnReadSettings = $("btn-read-settings");
+const readSettings = $("read-settings");
+const btnFontDec = $("btn-font-dec");
+const btnFontInc = $("btn-font-inc");
+const fontSizeLabel = $("font-size-label");
+const lineHeightSelect = $("line-height");
 const btnPrereq = $("btn-prereq");
 const docProgressBar = $("doc-progress-bar");
 const docScroll = $("doc-scroll");
@@ -98,6 +121,15 @@ const btnSpotAsk = $("btn-spot-ask");
 const btnThrowChat = $("btn-throw-chat");
 const btnQuoteNote = $("btn-quote-note");
 const btnHighlight = $("btn-highlight");
+const btnModeExplain = $("btn-mode-explain");
+const btnModeExample = $("btn-mode-example");
+const btnModePrereq = $("btn-mode-prereq");
+const btnModeCheck = $("btn-mode-check");
+const checkAnswerWrap = $("check-answer-wrap");
+const checkAnswer = $("check-answer");
+const btnCheckSubmit = $("btn-check-submit");
+const checkFeedback = $("check-feedback");
+const checkSelfRate = $("check-self-rate");
 
 const tabButtons = Array.from(document.querySelectorAll(".tab"));
 const tabInk = $("tab-ink");
@@ -115,6 +147,8 @@ const notesEmpty = $("notes-empty");
 const notesLayout = $("notes-layout");
 const notesSaveStatus = $("notes-save-status");
 const btnNotesSave = $("btn-notes-save");
+const btnNotesUndo = $("btn-notes-undo");
+const btnNotesExport = $("btn-notes-export");
 const notesContentEl = $("notes-content");
 const notesInstruction = $("notes-instruction");
 const btnNotesDraft = $("btn-notes-draft");
@@ -132,7 +166,11 @@ const codeEditor = $("code-editor");
 const btnSubmit = $("btn-submit");
 const exerciseReview = $("exercise-review");
 const btnExerciseNext = $("btn-exercise-next");
+const exerciseSelfRate = $("exercise-self-rate");
+const exerciseEvidenceStatus = $("exercise-evidence-status");
 const lastReview = $("last-review");
+const understandingCountEl = $("understanding-count");
+const practiceCountEl = $("practice-count");
 
 const confirmModal = $("confirm-modal");
 const confirmModalTitle = $("confirm-modal-title");
@@ -187,6 +225,14 @@ async function api(path, options = {}) {
 async function postJson(path, body) {
   return api(path, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function patchJson(path, body) {
+  return api(path, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -354,6 +400,8 @@ function renderStats() {
   readBar.style.width = total ? `${Math.max(4, Math.round((read / total) * 100))}%` : "0";
   noteCountEl.textContent = String(o.note_count || 0);
   exerciseCountEl.textContent = String(o.exercise_count || 0);
+  if (understandingCountEl) understandingCountEl.textContent = String(o.understanding_count || 0);
+  if (practiceCountEl) practiceCountEl.textContent = String(o.practice_count || 0);
   libraryCount.textContent = String(total);
 }
 
@@ -657,6 +705,7 @@ async function loadDocument(docId, options = {}) {
     renderDocView(data);
     await loadNotes(docId);
     await loadChat(docId);
+    await loadLearningEvidence(docId);
     await refreshSessionQuiet();
     renderExercise();
     renderReview();
@@ -685,6 +734,9 @@ function renderDocView(data) {
   docOriginal.hidden = !data.original_url;
   docOriginal.href = data.original_url || "#";
   btnPrereq.disabled = data.status !== "ready";
+  readLevelSelect.disabled = data.status !== "ready";
+  readLevelSelect.value = (data.document && data.document.read_level) || "";
+  setPositionStatus("", "");
 
   if (data.status !== "ready") {
     docPage.hidden = true;
@@ -715,6 +767,132 @@ function renderDocView(data) {
     }, 450);
   }, 0);
 }
+
+function applyReadingSettings() {
+  document.documentElement.style.setProperty("--read-font-size", `${readFontSize}px`);
+  document.documentElement.style.setProperty("--read-line-height", String(readLineHeight));
+  if (fontSizeLabel) fontSizeLabel.textContent = `${readFontSize}px`;
+  if (lineHeightSelect) lineHeightSelect.value = String(readLineHeight);
+  try {
+    localStorage.setItem("learning.readFontSize", String(readFontSize));
+    localStorage.setItem("learning.readLineHeight", String(readLineHeight));
+  } catch (e) {
+    /* ignore */
+  }
+}
+
+function loadReadingSettings() {
+  try {
+    const size = parseInt(localStorage.getItem("learning.readFontSize") || "", 10);
+    const line = parseFloat(localStorage.getItem("learning.readLineHeight") || "");
+    if (Number.isFinite(size)) readFontSize = Math.max(14, Math.min(24, size));
+    if (Number.isFinite(line)) readLineHeight = Math.max(1.4, Math.min(2.4, line));
+  } catch (e) {
+    /* ignore */
+  }
+  applyReadingSettings();
+}
+
+async function setReadLevel(level) {
+  if (!currentDocId()) return;
+  try {
+    await postJson(`/api/documents/${currentDocId()}/read-level`, { self_level: level });
+    if (currentDoc) currentDoc.read_level = level;
+    readLevelSelect.value = level;
+    showToast(level ? `读后自评：${level}` : "已清除读后自评");
+  } catch (e) {
+    showToast(e.message, 5000);
+  }
+}
+
+function toggleFocusMode(force) {
+  const on = force === undefined ? !document.body.classList.contains("focus-mode") : force;
+  document.body.classList.toggle("focus-mode", on);
+  if (btnFocus) btnFocus.textContent = on ? "退出专注" : "专注";
+  if (on) showToast("专注阅读：Ctrl+Shift+F 或 Esc 退出", 2600);
+}
+
+function showHelp() {
+  if (helpModal) helpModal.hidden = false;
+}
+
+function closeHelp() {
+  if (helpModal) helpModal.hidden = true;
+}
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+if (btnReadSettings) {
+  btnReadSettings.addEventListener("click", () => {
+    readSettings.hidden = !readSettings.hidden;
+  });
+}
+if (btnFontDec) {
+  btnFontDec.addEventListener("click", () => {
+    readFontSize = clampNumber(readFontSize - 1, 14, 24);
+    applyReadingSettings();
+  });
+}
+if (btnFontInc) {
+  btnFontInc.addEventListener("click", () => {
+    readFontSize = clampNumber(readFontSize + 1, 14, 24);
+    applyReadingSettings();
+  });
+}
+if (lineHeightSelect) {
+  lineHeightSelect.addEventListener("change", () => {
+    readLineHeight = clampNumber(parseFloat(lineHeightSelect.value) || 1.85, 1.4, 2.4);
+    applyReadingSettings();
+  });
+}
+if (readLevelSelect) {
+  readLevelSelect.addEventListener("change", () => setReadLevel(readLevelSelect.value));
+}
+if (btnFocus) btnFocus.addEventListener("click", () => toggleFocusMode());
+if (btnHelp) btnHelp.addEventListener("click", showHelp);
+if (btnHelpClose) btnHelpClose.addEventListener("click", closeHelp);
+if (helpModal) {
+  helpModal.addEventListener("mousedown", (e) => {
+    if (e.target === helpModal) closeHelp();
+  });
+}
+
+function isTypingTarget(target) {
+  if (!target || !(target instanceof Element)) return false;
+  const tag = target.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    target.isContentEditable
+  );
+}
+
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
+    e.preventDefault();
+    toggleFocusMode();
+    return;
+  }
+  if (e.key === "Escape") {
+    if (helpModal && !helpModal.hidden) {
+      closeHelp();
+      return;
+    }
+    if (document.body.classList.contains("focus-mode")) {
+      toggleFocusMode(false);
+      return;
+    }
+    closeBubble();
+    return;
+  }
+  if (e.key === "?" && !isTypingTarget(e.target) && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    showHelp();
+  }
+});
 
 function renderStatusCard(data) {
   const job = data.job || {};
@@ -893,6 +1071,20 @@ function collectPosition() {
   };
 }
 
+function setPositionStatus(kind, text) {
+  if (!positionStatusEl) return;
+  positionStatusEl.textContent = text || "";
+  positionStatusEl.classList.remove("is-saving", "is-ok", "is-err");
+  if (kind) positionStatusEl.classList.add(kind);
+  clearTimeout(positionStatusTimer);
+  if (kind === "is-ok") {
+    positionStatusTimer = setTimeout(() => {
+      positionStatusEl.textContent = "";
+      positionStatusEl.classList.remove("is-ok");
+    }, 3200);
+  }
+}
+
 function schedulePositionSave() {
   if (suppressPositionSave) return;
   clearTimeout(positionTimer);
@@ -912,9 +1104,16 @@ async function savePositionNow(beacon = false) {
       });
       return;
     }
+    setPositionStatus("is-saving", "保存位置…");
     await postJson(`/api/documents/${currentDocId()}/position`, position);
+    const stamp = new Date().toLocaleTimeString("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    setPositionStatus("is-ok", `位置已保存 · ${stamp}`);
   } catch (e) {
-    /* 位置保存失败不打扰阅读 */
+    setPositionStatus("is-err", "位置未保存");
   }
 }
 
@@ -951,6 +1150,22 @@ window.addEventListener("beforeunload", () => {
 // ------------------------------------------------------------
 // 划段 / 批注
 // ------------------------------------------------------------
+function resetCheckUi() {
+  checkQuestion = "";
+  checkSelection = null;
+  checkId = "";
+  if (checkAnswerWrap) checkAnswerWrap.hidden = true;
+  if (checkAnswer) checkAnswer.value = "";
+  if (checkFeedback) {
+    checkFeedback.hidden = true;
+    checkFeedback.innerHTML = "";
+  }
+  if (checkSelfRate) {
+    checkSelfRate.hidden = true;
+    checkSelfRate.querySelectorAll("button").forEach((btn) => btn.removeAttribute("data-selected"));
+  }
+}
+
 function closeBubble(force = false) {
   if (!force && spotBubbleLoading) return;
   bubble.hidden = true;
@@ -958,6 +1173,7 @@ function closeBubble(force = false) {
   bubbleAnswer.innerHTML = "";
   bubbleInput.value = "";
   selection = null;
+  resetCheckUi();
 }
 
 function openBubble(info) {
@@ -966,6 +1182,7 @@ function openBubble(info) {
   bubbleInput.value = "";
   bubbleAnswer.hidden = true;
   bubbleAnswer.innerHTML = "";
+  resetCheckUi();
   bubble.hidden = false;
   openRightRail();
   switchTab("chat");
@@ -1033,9 +1250,6 @@ document.addEventListener("mousedown", (e) => {
   if (bubble.hidden || spotBubbleLoading) return;
   if (bubble.contains(e.target) || docBody.contains(e.target)) return;
   closeBubble();
-});
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeBubble();
 });
 
 function applyHighlights() {
@@ -1289,6 +1503,7 @@ async function sendChat(question, quote) {
       title: currentDoc ? currentDoc.title : undefined,
       question: q || "讲这段",
       quote: quote || undefined,
+      block_id: quote ? (selection && selection.blockId) || undefined : undefined,
     });
     chatMessages = data.messages || [];
     renderChat();
@@ -1326,6 +1541,7 @@ async function spotAsk() {
       title: currentDoc ? currentDoc.title : undefined,
       question: bubbleInput.value.trim() || "讲这段",
       quote: selection.quote,
+      block_id: selection.blockId || undefined,
     });
     setMarkdownHtml(bubbleAnswer, data.reply || "");
     attachCopyButtons(bubbleAnswer);
@@ -1345,17 +1561,188 @@ async function throwToChat() {
   if (chatMessages.length) closeBubble(true);
 }
 
+// ------------------------------------------------------------
+// 划段动作 / 理解检查
+// ------------------------------------------------------------
+const SELECTION_ACTION_LABEL = {
+  explain: "解释",
+  example: "举例",
+  prereq: "补前置",
+};
+
+function markSelfRate(container, level) {
+  if (!container) return;
+  container.querySelectorAll("button[data-level]").forEach((btn) => {
+    if (btn.dataset.level === level) btn.setAttribute("data-selected", "1");
+    else btn.removeAttribute("data-selected");
+  });
+}
+
+function checkUiBusy(busy) {
+  [btnModeExplain, btnModeExample, btnModePrereq, btnModeCheck, btnCheckSubmit].forEach((btn) => {
+    if (btn) btn.disabled = !!busy;
+  });
+}
+
+async function runSelectionAction(mode) {
+  if (!selection) return showToast("先划一段原文");
+  if (!llmConfigured()) {
+    showToast("请先在 API 设置中配置接口；阅读和笔记不受影响");
+    return;
+  }
+  if (mode === "check") return requestCheckQuestion();
+  resetCheckUi();
+  bubbleAnswer.hidden = false;
+  bubbleAnswer.innerHTML = `<div class="loading">${SELECTION_ACTION_LABEL[mode]}中…</div>`;
+  checkUiBusy(true);
+  try {
+    const data = await postJson("/api/selection/action", {
+      doc_id: currentDocId(),
+      mode,
+      quote: selection.quote,
+      block_id: selection.blockId || undefined,
+    });
+    setMarkdownHtml(bubbleAnswer, data.markdown || "");
+    attachCopyButtons(bubbleAnswer);
+  } catch (e) {
+    bubbleAnswer.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+    showToast(e.message, 5000);
+  } finally {
+    checkUiBusy(false);
+  }
+}
+
+async function requestCheckQuestion() {
+  if (!selection) return showToast("先划一段原文");
+  if (!llmConfigured()) {
+    showToast("请先在 API 设置中配置接口；阅读和笔记不受影响");
+    return;
+  }
+  checkSelection = { quote: selection.quote, blockId: selection.blockId };
+  checkQuestion = "";
+  checkId = "";
+  bubbleAnswer.hidden = false;
+  bubbleAnswer.innerHTML = '<div class="loading">正在出理解检查题…</div>';
+  if (checkAnswerWrap) checkAnswerWrap.hidden = true;
+  if (checkFeedback) {
+    checkFeedback.hidden = true;
+    checkFeedback.innerHTML = "";
+  }
+  if (checkSelfRate) checkSelfRate.hidden = true;
+  checkUiBusy(true);
+  try {
+    const data = await postJson("/api/selection/action", {
+      doc_id: currentDocId(),
+      mode: "check",
+      quote: checkSelection.quote,
+      block_id: checkSelection.blockId || undefined,
+    });
+    checkQuestion = data.markdown || "";
+    setMarkdownHtml(bubbleAnswer, checkQuestion);
+    attachCopyButtons(bubbleAnswer);
+    if (checkAnswerWrap) checkAnswerWrap.hidden = false;
+    if (checkAnswer) {
+      checkAnswer.value = "";
+      checkAnswer.focus();
+    }
+  } catch (e) {
+    bubbleAnswer.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+    showToast(e.message, 5000);
+  } finally {
+    checkUiBusy(false);
+  }
+}
+
+async function submitCheck() {
+  if (!checkQuestion) return showToast("先点「理解检查」生成题目");
+  if (!checkSelection) return showToast("先划一段原文");
+  const answer = (checkAnswer && checkAnswer.value.trim()) || "";
+  if (!answer) return showToast("先写下你的理解");
+  if (!llmConfigured()) return showToast("请先在 API 设置中配置接口");
+  if (btnCheckSubmit) btnCheckSubmit.disabled = true;
+  if (checkFeedback) {
+    checkFeedback.hidden = false;
+    checkFeedback.innerHTML = '<div class="loading">正在检查…</div>';
+  }
+  try {
+    const data = await postJson("/api/understanding", {
+      doc_id: currentDocId(),
+      block_id: checkSelection.blockId || undefined,
+      quote: checkSelection.quote,
+      question: checkQuestion,
+      answer,
+    });
+    checkId = data.id || "";
+    setMarkdownHtml(checkFeedback, data.feedback || "");
+    attachCopyButtons(checkFeedback);
+    if (checkSelfRate) {
+      checkSelfRate.hidden = false;
+      markSelfRate(checkSelfRate, data.self_level || "");
+    }
+    await refreshSessionQuiet();
+    showToast(data.verdict ? `AI 判断：${data.verdict}` : "检查完成");
+  } catch (e) {
+    if (checkFeedback) checkFeedback.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
+    showToast(e.message, 5000);
+  } finally {
+    if (btnCheckSubmit) btnCheckSubmit.disabled = false;
+  }
+}
+
+async function rateCheck(level) {
+  if (!checkId) return showToast("先提交理解检查");
+  try {
+    await patchJson(`/api/understanding/${encodeURIComponent(checkId)}`, { self_level: level });
+    markSelfRate(checkSelfRate, level);
+    showToast(`已记录理解自评：${level}`);
+  } catch (e) {
+    showToast(e.message, 5000);
+  }
+}
+
 btnSpotAsk.addEventListener("click", spotAsk);
 btnThrowChat.addEventListener("click", throwToChat);
 btnHighlight.addEventListener("click", createHighlight);
+btnModeExplain.addEventListener("click", () => runSelectionAction("explain"));
+btnModeExample.addEventListener("click", () => runSelectionAction("example"));
+btnModePrereq.addEventListener("click", () => runSelectionAction("prereq"));
+btnModeCheck.addEventListener("click", () => runSelectionAction("check"));
+btnCheckSubmit.addEventListener("click", submitCheck);
+if (checkSelfRate) {
+  checkSelfRate.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-level]");
+    if (btn) rateCheck(btn.dataset.level);
+  });
+}
+
+document.addEventListener("click", (e) => {
+  const cite = e.target.closest("a.cite");
+  if (!cite) return;
+  e.preventDefault();
+  const blockId = cite.dataset.blockId;
+  const block = docBody.querySelector(
+    `.doc-block[data-block-id="${CSS.escape(blockId)}"]`
+  );
+  if (!block) {
+    showToast("引用对应的原文块不在当前版本中");
+    return;
+  }
+  block.scrollIntoView({ behavior: "smooth", block: "center" });
+  block.classList.remove("cite-flash");
+  void block.offsetWidth;
+  block.classList.add("cite-flash");
+  setTimeout(() => block.classList.remove("cite-flash"), 1600);
+});
 btnQuoteNote.addEventListener("click", async () => {
   if (!selection) return showToast("先划一段原文");
   const quote = selection.quote;
   const block = `> ${quote.split(/\r?\n/).join("\n> ")}`;
   if (notesDocId !== currentDocId()) await loadNotes(currentDocId());
+  prepareNotesWrite();
   notesContentEl.value = notesContentEl.value.trim()
     ? `${notesContentEl.value.trimEnd()}\n\n${block}`
     : block;
+  finishNotesWrite();
   notesDirty = true;
   closeBubble(true);
   switchTab("notes");
@@ -1379,9 +1766,99 @@ function updateNotesEnabled() {
   notesContentEl.disabled = !hasDoc;
   notesInstruction.disabled = !hasDoc;
   btnNotesSave.disabled = !hasDoc || notesSaving;
+  if (btnNotesUndo) btnNotesUndo.disabled = !notesUndoStack.length;
+  if (btnNotesExport) {
+    btnNotesExport.disabled = !hasDoc || !(notesContentEl.value || "").trim();
+  }
   const ai = hasDoc && ready() && llmConfigured();
   btnNotesDraft.disabled = !ai;
   btnNotesRefreshSuggest.disabled = !ai;
+}
+
+const NOTES_UNDO_LIMIT = 50;
+
+function updateNotesUndoButton() {
+  if (btnNotesUndo) btnNotesUndo.disabled = !notesUndoStack.length;
+}
+
+function pushNotesUndo(value) {
+  if (value === undefined) return;
+  if (notesUndoStack[notesUndoStack.length - 1] === value) return;
+  notesUndoStack.push(value);
+  while (notesUndoStack.length > NOTES_UNDO_LIMIT) notesUndoStack.shift();
+  updateNotesUndoButton();
+}
+
+function resetNotesUndo() {
+  notesUndoStack = [];
+  clearTimeout(notesUndoTimer);
+  notesUndoTimer = null;
+  notesLastValue = notesContentEl.value;
+  updateNotesUndoButton();
+}
+
+function beginNotesEdit() {
+  if (notesUndoTimer) return;
+  pushNotesUndo(notesLastValue);
+  notesUndoTimer = setTimeout(() => {
+    notesUndoTimer = null;
+    notesLastValue = notesContentEl.value;
+  }, 800);
+}
+
+function prepareNotesWrite() {
+  pushNotesUndo(notesContentEl.value);
+  clearTimeout(notesUndoTimer);
+  notesUndoTimer = null;
+}
+
+function finishNotesWrite() {
+  notesLastValue = notesContentEl.value;
+  updateNotesUndoButton();
+  updateTabBadges();
+}
+
+async function undoNotes() {
+  if (!notesUndoStack.length) return showToast("没有可撤销的修改");
+  const prev = notesUndoStack.pop();
+  notesContentEl.value = prev;
+  notesLastValue = prev;
+  notesDirty = true;
+  clearTimeout(notesSaveTimer);
+  updateNotesUndoButton();
+  updateTabBadges();
+  if (notesSaving) scheduleNotesSave();
+  else await saveNotesNow();
+  showToast("已撤销一步");
+}
+
+function notesFileName(title) {
+  return `${String(title || "笔记").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80)}.md`;
+}
+
+function exportNotes() {
+  if (!notesDocId) return showToast("先打开一份资料");
+  const content = (notesContentEl.value || "").trim();
+  if (!content) return showToast("笔记还是空的");
+  const title = notesTitle || (currentDoc && currentDoc.title) || "笔记";
+  const src = (currentDoc && (currentDoc.source_name || currentDoc.source_path)) || "";
+  const stamp = new Date().toLocaleString("zh-CN", { hour12: false });
+  const parts = [];
+  if (!content.startsWith("#")) parts.push(`# ${title}`);
+  parts.push(`> 来源：${src || "未记录"}  \n> 导出：${stamp}`);
+  parts.push(content);
+  const blob = new Blob([`${parts.join("\n\n")}\n`], {
+    type: "text/markdown;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = notesFileName(title);
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast("已导出 Markdown");
 }
 
 async function loadNotes(docId) {
@@ -1393,6 +1870,7 @@ async function loadNotes(docId) {
   notesDraftWrap.hidden = true;
   notesDraftBody.innerHTML = "";
   notesContentEl.value = "";
+  resetNotesUndo();
   setSaveState("", "");
   updateNotesEnabled();
   renderSuggestions();
@@ -1403,6 +1881,7 @@ async function loadNotes(docId) {
     notesTitle = data.title || (currentDoc && currentDoc.title) || "";
     notesContent = data.content || "";
     notesContentEl.value = notesContent;
+    resetNotesUndo();
     setSaveState("is-ok", data.updated_at ? `已同步 · ${data.updated_at}` : "");
   } catch (e) {
     setSaveState("is-err", "加载失败");
@@ -1487,7 +1966,9 @@ function renderSuggestions() {
       const item = notesSuggestions.find((s) => s.id === id);
       if (!item) return;
       const value = notesContentEl.value;
+      prepareNotesWrite();
       notesContentEl.value = value.trim() ? `${value.trimEnd()}\n\n${item.text}` : item.text;
+      finishNotesWrite();
       notesDirty = true;
       notesSuggestions = notesSuggestions.filter((s) => s.id !== id);
       renderSuggestions();
@@ -1544,9 +2025,11 @@ async function requestDraft() {
 
 async function applyDraft() {
   if (!notesDraftText) return;
+  prepareNotesWrite();
   notesContentEl.value = notesDraftReplace.checked
     ? notesDraftText
     : `${notesContentEl.value.trimEnd()}\n\n---\n\n${notesDraftText}`.trim();
+  finishNotesWrite();
   notesDirty = true;
   notesDraftWrap.hidden = true;
   notesDraftText = "";
@@ -1555,8 +2038,15 @@ async function applyDraft() {
 }
 
 btnNotesSave.addEventListener("click", saveNotesNow);
+btnNotesUndo.addEventListener("click", undoNotes);
+btnNotesExport.addEventListener("click", exportNotes);
 notesContentEl.addEventListener("input", () => {
+  beginNotesEdit();
   notesDirty = true;
+  if (btnNotesExport) {
+    btnNotesExport.disabled = !(notesContentEl.value || "").trim();
+  }
+  updateTabBadges();
   scheduleNotesSave();
 });
 btnNotesRefreshSuggest.addEventListener("click", () => {
@@ -1573,6 +2063,49 @@ btnNotesDraftDiscard.addEventListener("click", () => {
 // ------------------------------------------------------------
 // 练习 / 复盘
 // ------------------------------------------------------------
+async function loadLearningEvidence(docId) {
+  lastExerciseEvidenceId = "";
+  if (exerciseSelfRate) {
+    exerciseSelfRate.hidden = true;
+    markSelfRate(exerciseSelfRate, "");
+  }
+  if (exerciseEvidenceStatus) exerciseEvidenceStatus.textContent = "";
+  if (!docId) return;
+  try {
+    const data = await api(`/api/documents/${encodeURIComponent(docId)}/learning`);
+    const latest = (data.practice || [])[0];
+    if (!latest) return;
+    lastExerciseEvidenceId = latest.id || "";
+    if (exerciseSelfRate) {
+      exerciseSelfRate.hidden = false;
+      markSelfRate(exerciseSelfRate, latest.self_level || "");
+    }
+    if (exerciseEvidenceStatus) {
+      exerciseEvidenceStatus.textContent = latest.created_at
+        ? `最近一次练习 · ${latest.created_at}`
+        : "最近一次练习";
+    }
+  } catch (e) {
+    /* 学习记录读取失败不影响阅读与出题 */
+  }
+}
+
+async function rateExercise(level) {
+  if (!lastExerciseEvidenceId) return;
+  try {
+    await patchJson(
+      `/api/exercise-evidence/${encodeURIComponent(lastExerciseEvidenceId)}`,
+      { self_level: level }
+    );
+    markSelfRate(exerciseSelfRate, level);
+    await refreshSessionQuiet();
+    renderStats();
+    showToast(`已记录练习自评：${level}`);
+  } catch (e) {
+    showToast(e.message, 5000);
+  }
+}
+
 function renderExercise() {
   const docId = currentDocId();
   const selected = session && session.selected_document;
@@ -1598,6 +2131,7 @@ function renderExercise() {
     btnExerciseNext.hidden = true;
   }
   lastSubmission = sameDoc ? session.last_submission : null;
+  if (exerciseSelfRate) exerciseSelfRate.hidden = !lastExerciseEvidenceId;
   updateLlmStatus();
   updateTabBadges();
 }
@@ -1630,6 +2164,12 @@ async function requestExercise() {
   btnExerciseNext.hidden = true;
   exerciseReview.innerHTML = "";
   codeEditor.value = "";
+  lastExerciseEvidenceId = "";
+  if (exerciseSelfRate) {
+    exerciseSelfRate.hidden = true;
+    markSelfRate(exerciseSelfRate, "");
+  }
+  if (exerciseEvidenceStatus) exerciseEvidenceStatus.textContent = "";
   exerciseQuestion.innerHTML = '<div class="loading">正在出题…</div>';
   try {
     const data = await postJson("/api/exercise", {
@@ -1663,6 +2203,14 @@ async function submitExercise() {
     });
     setMarkdownHtml(exerciseReview, data.review || "");
     attachCopyButtons(exerciseReview);
+    lastExerciseEvidenceId = data.evidence_id || "";
+    if (exerciseSelfRate) {
+      exerciseSelfRate.hidden = !lastExerciseEvidenceId;
+      markSelfRate(exerciseSelfRate, "");
+    }
+    if (exerciseEvidenceStatus) {
+      exerciseEvidenceStatus.textContent = lastExerciseEvidenceId ? "刚提交的练习" : "";
+    }
     btnExerciseNext.hidden = false;
     await refreshSessionQuiet();
     renderReview();
@@ -1678,6 +2226,12 @@ async function submitExercise() {
 btnExercise.addEventListener("click", requestExercise);
 btnExerciseNext.addEventListener("click", requestExercise);
 btnSubmit.addEventListener("click", submitExercise);
+if (exerciseSelfRate) {
+  exerciseSelfRate.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-level]");
+    if (btn) rateExercise(btn.dataset.level);
+  });
+}
 
 // ------------------------------------------------------------
 // 前置自评
@@ -2135,6 +2689,9 @@ function renderMarkdown(md) {
   if (inCode) flushCode();
   let result = out.join("\n");
   result = result.replace(/(<li>.*?<\/li>\s*)+/gs, (m) => `<ul>${m}</ul>`);
+  result = result.replace(/\[cite:([0-9a-fA-F]{8,})\]/g, (_all, blockId) => {
+    return `<a href="#block-${blockId}" class="cite" data-block-id="${blockId}">原文</a>`;
+  });
   return result;
 }
 
@@ -2299,4 +2856,5 @@ window.addEventListener("resize", moveTabInk);
 document.addEventListener("DOMContentLoaded", () => {});
 switchTab("chat");
 moveTabInk();
+loadReadingSettings();
 loadPage();
