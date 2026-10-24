@@ -6,6 +6,7 @@
   <title>学习助手</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/katex/katex.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='settings-modal.css') }}">
 </head>
 <body>
 
@@ -20,11 +21,11 @@
     <button type="button" id="btn-annot-toggle" class="icon-btn annot-toggle" title="显示或隐藏批注栏" aria-label="批注栏">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>批注
     </button>
-    <a id="btn-settings" class="btn" href="/settings" title="工作台设置">设置</a>
-    <a id="btn-avatar" class="topbar-avatar" href="/user" title="个人主页" aria-label="个人主页">
+    <button type="button" id="btn-settings" class="btn" title="工作台设置">设置</button>
+    <button type="button" id="btn-avatar" class="topbar-avatar" title="个人主页" aria-label="个人主页">
       <img id="topbar-avatar-img" alt="" hidden>
       <span id="topbar-avatar-initial" aria-hidden="true">读</span>
-    </a>
+    </button>
   </header>
 
   <div class="job-strip" id="job-strip" hidden></div>
@@ -299,10 +300,13 @@
     </div>
   </div>
 
+  {% include "_settings_modal.html" %}
+
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="{{ url_for('static', filename='vendor/katex/katex.min.js') }}"></script>
   <script src="{{ url_for('static', filename='vendor/katex/auto-render.min.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='settings-modal.js') }}"></script>
 </body>
 </html>

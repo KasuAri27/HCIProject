@@ -2202,6 +2202,7 @@ body.focus-mode .workbench {
   place-items: center;
   width: 32px;
   height: 32px;
+  padding: 0;
   flex-shrink: 0;
   overflow: hidden;
   font-family: var(--font-doc);
@@ -2211,6 +2212,7 @@ body.focus-mode .workbench {
   background: var(--accent-wash);
   border: 1px solid rgba(15, 110, 124, 0.22);
   border-radius: 50%;
+  cursor: pointer;
 }
 .topbar-avatar:hover {
   border-color: var(--accent);

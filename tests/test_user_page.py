@@ -91,18 +91,19 @@ class HomeHeaderTests(BaseTest):
 
 
 class UserPageTests(BaseTest):
-    def test_user_page_keeps_profile_and_drops_api_management(self):
+    def test_user_page_redirects_to_modal_panel(self):
         response = self.client.get("/user")
-        self.assertEqual(response.status_code, 200)
-        html = response.get_data(as_text=True)
-        self.assertIn("读者档案", html)
-        self.assertIn('id="profile-form"', html)
-        self.assertIn('class="page-back-btn"', html)
-        self.assertIn('id="avatar-input"', html)
-        self.assertIn('id="btn-avatar-remove"', html)
-        self.assertNotIn("API 服务", html)
-        self.assertNotIn('id="service-list"', html)
-        self.assertNotIn('id="custom-form"', html)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/?panel=user", response.headers["Location"])
+        html = self.client.get("/").get_data(as_text=True)
+        for element_id in (
+            "settings-modal",
+            "settings-tab-user",
+            "modal-profile-form",
+            "modal-avatar-input",
+            "modal-avatar-remove",
+        ):
+            self.assertIn(f'id="{element_id}"', html, element_id)
 
 
 if __name__ == "__main__":

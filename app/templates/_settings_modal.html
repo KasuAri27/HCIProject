@@ -1,0 +1,184 @@
+<!-- 工作台设置：设置 / 用户 / API 配置 -->
+<div class="modal-mask settings-mask" id="settings-modal" hidden>
+  <div class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <header class="settings-head">
+      <div>
+        <p class="settings-kicker">工作台</p>
+        <h2 id="settings-title">设置</h2>
+      </div>
+      <button type="button" class="settings-close" id="settings-close" aria-label="关闭设置">×</button>
+    </header>
+
+    <div class="settings-layout">
+      <nav class="settings-tabs" role="tablist" aria-label="设置分类">
+        <button type="button" role="tab" id="settings-tab-settings" data-settings-tab="settings" aria-selected="true">设置</button>
+        <button type="button" role="tab" id="settings-tab-user" data-settings-tab="user" aria-selected="false">用户</button>
+        <button type="button" role="tab" id="settings-tab-api" data-settings-tab="api" aria-selected="false">API 配置</button>
+      </nav>
+
+      <div class="settings-panels">
+        <section class="settings-panel" id="settings-panel-settings" role="tabpanel" aria-labelledby="settings-tab-settings">
+          <div class="settings-section">
+            <h3>阅读</h3>
+            <div class="settings-row">
+              <div>
+                <span class="settings-label">正文字号</span>
+                <p class="settings-help">只影响 Markdown 正文，不改变 PDF 播放页。</p>
+              </div>
+              <div class="settings-stepper">
+                <button type="button" id="modal-font-dec" aria-label="减小字号">−</button>
+                <output id="modal-font-size">17 px</output>
+                <button type="button" id="modal-font-inc" aria-label="增大字号">+</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <span class="settings-label">行距</span>
+                <p class="settings-help">长段落建议用“舒适”。</p>
+              </div>
+              <div class="settings-segmented" id="modal-line-height" role="group" aria-label="行距">
+                <button type="button" data-line="1.6">紧凑</button>
+                <button type="button" data-line="1.85">舒适</button>
+                <button type="button" data-line="2.1">宽松</button>
+              </div>
+            </div>
+            <div class="settings-sample" id="modal-reading-sample">
+              <p>注意力机制按相关性对输入加权求和，输出是对重要部分的聚合。调整字号或行距，这段文字会同步变化。</p>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <h3>学习数据</h3>
+            <div class="settings-row">
+              <div>
+                <span class="settings-label">重新扫描资料库</span>
+                <p class="settings-help">检查 library/ 里新增或改动的文件，并开始解析。</p>
+              </div>
+              <button type="button" class="btn btn-small" id="modal-rescan">重新扫描</button>
+            </div>
+            <div class="settings-row">
+              <div>
+                <span class="settings-label">清空学习记录</span>
+                <p class="settings-help">清空已读、对话、笔记、标注、理解检查与练习记录；文档、原文件、播放 PDF 和 API 配置保留。</p>
+              </div>
+              <button type="button" class="btn btn-small btn-quiet" id="modal-reset">清空学习记录</button>
+            </div>
+            <p class="settings-summary" id="modal-data-summary"></p>
+          </div>
+
+          <div class="settings-section">
+            <h3>快捷键</h3>
+            <dl class="settings-shortcuts">
+              <div><dt><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dt><dd>发送对话</dd></div>
+              <div><dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd></dt><dd>切换专注阅读</dd></div>
+              <div><dt><kbd>?</kbd></dt><dd>打开快捷键帮助（不在输入框内时）</dd></div>
+              <div><dt><kbd>Esc</kbd></dt><dd>关闭菜单、气泡或退出专注</dd></div>
+            </dl>
+          </div>
+        </section>
+
+        <section class="settings-panel" id="settings-panel-user" role="tabpanel" aria-labelledby="settings-tab-user" hidden>
+          <div class="modal-user-head">
+            <div class="modal-avatar" id="modal-avatar">
+              <img id="modal-avatar-img" alt="" hidden>
+              <span id="modal-avatar-initial" aria-hidden="true">读</span>
+            </div>
+            <div class="modal-user-copy">
+              <h3 id="modal-user-name">读者</h3>
+              <p id="modal-user-goal">把读过的资料，变成自己的笔记。</p>
+              <div class="modal-avatar-tools">
+                <label class="text-link" for="modal-avatar-input">更换头像</label>
+                <input id="modal-avatar-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+                <button type="button" class="text-link" id="modal-avatar-remove" hidden>移除头像</button>
+              </div>
+            </div>
+          </div>
+
+          <form class="settings-form" id="modal-profile-form">
+            <label class="field" for="modal-profile-name">怎么称呼你
+              <input id="modal-profile-name" type="text" maxlength="40" placeholder="留空就是“读者”" autocomplete="off">
+            </label>
+            <label class="field" for="modal-profile-goal">这阵子的学习目标
+              <input id="modal-profile-goal" type="text" maxlength="200" placeholder="例如：读完机器学习课件" autocomplete="off">
+            </label>
+            <button type="submit" class="btn btn-primary">保存档案</button>
+          </form>
+
+          <div class="settings-stats">
+            <div><span id="modal-stat-docs">0</span><em>份资料</em></div>
+            <div><span id="modal-stat-read">0</span><em>已读</em></div>
+            <div><span id="modal-stat-notes">0</span><em>笔记</em></div>
+            <div><span id="modal-stat-practice">0</span><em>练习记录</em></div>
+          </div>
+        </section>
+
+        <section class="settings-panel" id="settings-panel-api" role="tabpanel" aria-labelledby="settings-tab-api" hidden>
+          <div class="modal-provider-list" id="modal-provider-list"></div>
+
+          <div id="modal-provider-detail" class="modal-provider-detail" hidden>
+            <header class="modal-provider-head">
+              <div>
+                <h3 id="modal-provider-name"></h3>
+                <p id="modal-provider-meta"></p>
+              </div>
+              <span class="modal-provider-state" id="modal-provider-state"></span>
+            </header>
+
+            <form class="settings-form" id="modal-provider-form">
+              <label class="field" for="modal-edit-base">API 地址
+                <input id="modal-edit-base" type="text" spellcheck="false" autocomplete="url">
+              </label>
+              <label class="field" for="modal-edit-key">API Key
+                <input id="modal-edit-key" type="password" autocomplete="off" spellcheck="false">
+              </label>
+              <div class="settings-field-row">
+                <label class="field" for="modal-edit-timeout">超时（秒）
+                  <input id="modal-edit-timeout" type="number" min="1" step="1">
+                </label>
+                <label class="field" for="modal-edit-temperature">温度
+                  <input id="modal-edit-temperature" type="number" min="0" max="2" step="0.1">
+                </label>
+              </div>
+              <div class="settings-actions">
+                <button type="submit" class="btn btn-primary">保存服务</button>
+                <button type="button" class="btn btn-small" id="modal-scan-models">扫描模型</button>
+                <button type="button" class="btn btn-small btn-quiet" id="modal-clear-key">清除 Key</button>
+                <button type="button" class="btn btn-small btn-quiet" id="modal-delete-provider">删除服务</button>
+              </div>
+            </form>
+
+            <div class="modal-model-head">
+              <h4>模型</h4>
+              <span id="modal-model-summary"></span>
+              <span class="grow"></span>
+              <button type="button" class="text-link" id="modal-enable-all">全部启用</button>
+            </div>
+            <div class="modal-model-list" id="modal-model-list"></div>
+            <div class="modal-model-add">
+              <input id="modal-model-add" type="text" placeholder="手动添加模型 ID，例如 local-model" spellcheck="false">
+              <button type="button" class="text-link" id="modal-add-model">添加模型</button>
+            </div>
+          </div>
+
+          <p class="settings-help" id="modal-provider-empty" hidden>还没有服务，先在下面添加一个自定义服务。</p>
+
+          <div class="modal-custom">
+            <h4>添加自定义服务</h4>
+            <form class="settings-form settings-form-row" id="modal-custom-form">
+              <label class="field" for="modal-custom-name">名称
+                <input id="modal-custom-name" type="text" required autocomplete="off">
+              </label>
+              <label class="field" for="modal-custom-base">API 地址
+                <input id="modal-custom-base" type="text" placeholder="https://example.com/v1" required spellcheck="false">
+              </label>
+              <label class="field" for="modal-custom-key">API Key
+                <input id="modal-custom-key" type="password" autocomplete="off" spellcheck="false">
+              </label>
+              <button type="submit" class="btn btn-small">添加服务</button>
+            </form>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
