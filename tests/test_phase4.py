@@ -11,9 +11,9 @@ from pptx.util import Inches
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
-from app import store
+from app import converters, migrate, store
 
-from test_phase2 import BaseTest
+from test_phase2 import BaseTest, make_docx, make_pdf
 
 
 def make_png(size=(90, 60), color=(20, 120, 140)) -> bytes:
@@ -62,6 +62,7 @@ class PptxTests(BaseTest):
         doc_id = response.get_json()["document_id"]
         content = self.doc_content(doc_id)
         self.assertEqual(content["status"], "ready")
+        self.assertEqual(content["view_mode"], "pdf")
         self.assertEqual(len(content["chapters"]), 2)
         self.assertIn("<table>", content["html"])
         self.assertIn("<img", content["html"])
@@ -79,6 +80,16 @@ class PptxTests(BaseTest):
 
         labels = {block.get("locator_label") for block in content["blocks"]}
         self.assertTrue(any("第 1 页" in (label or "") for label in labels))
+
+    def test_docx_conversion_failure_is_reported(self):
+        with patch(
+            "app.converters.convert_to_pdf",
+            side_effect=converters.ConvertError("需要本机 Microsoft Office"),
+        ):
+            self.upload("docx.docx", make_docx())
+        doc = self.docs()[0]
+        self.assertEqual(doc["version_status"], "failed")
+        self.assertIn("Office", doc.get("version_error") or "")
 
     def test_pptx_missing_dependency_is_reported(self):
         with patch.dict("sys.modules", {"pptx": None}):
@@ -113,6 +124,32 @@ class ScanPdfTests(BaseTest):
         message = doc.get("version_error") or ""
         self.assertIn("Tesseract", message)
         self.assertIn("扫描", message)
+
+
+class RenderMigrationTests(BaseTest):
+    def test_existing_office_documents_get_playback_pdf(self):
+        doc_id = self.upload("old.docx", make_docx()).get_json()["document_id"]
+        content = self.doc_content(doc_id)
+        version_id = content["version"]["id"]
+        store.set_version_render(version_id, None)
+        missing = self.doc_content(doc_id)
+        self.assertEqual(missing["view_mode"], "markdown")
+        self.assertTrue(missing["pdf_missing"])
+
+        result = migrate.ensure_render_paths()
+        self.assertGreaterEqual(result["updated"], 1)
+        restored = self.doc_content(doc_id)
+        self.assertEqual(restored["view_mode"], "pdf")
+        self.assertFalse(restored["pdf_missing"])
+
+    def test_existing_pdf_gets_playback_path(self):
+        doc_id = self.upload("old.pdf", make_pdf()).get_json()["document_id"]
+        version_id = self.doc_content(doc_id)["version"]["id"]
+        store.set_version_render(version_id, None)
+        migrate.ensure_render_paths()
+        content = self.doc_content(doc_id)
+        self.assertEqual(content["view_mode"], "pdf")
+        self.assertTrue(content["pdf_url"])
 
 
 class SearchTests(BaseTest):
@@ -237,7 +274,14 @@ class FrontendPhase4Tests(unittest.TestCase):
         html = (Path(config.APP_DIR) / "app" / "templates" / "index.html").read_text(
             encoding="utf-8"
         )
-        for element_id in ("search-panel", "search-results", "btn-ask-cross", "doc-version-note"):
+        for element_id in (
+            "search-panel",
+            "search-results",
+            "btn-ask-cross",
+            "doc-version-note",
+            "pdf-view",
+            "pdf-frame",
+        ):
             self.assertIn(f'id="{element_id}"', html, element_id)
         self.assertIn(".pptx", html)
 

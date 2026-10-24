@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from . import config, parsers, source, store
+from . import config, converters, parsers, source, store
 
 ALLOWED_FORMATS = {
     ".md": "md",
@@ -341,7 +341,18 @@ def process_job(job_id: str) -> None:
             asset_dir=(config.ORIGINALS_DIR / doc_id / "assets") if doc_id else None,
             asset_url_prefix=f"/api/documents/{doc_id}/assets/" if doc_id else "",
         )
+        fmt = (job.get("source_format") or path.suffix.lstrip(".")).lower()
+        render_path = None
+        if fmt in ("docx", "pptx"):
+            store.update_job(job_id, progress=55, stage="生成 PDF 播放文件")
+            render_path = converters.convert_to_pdf(
+                path,
+                config.ORIGINALS_DIR / doc_id / "rendered" / f"{version_id}.pdf",
+            )
+        elif fmt == "pdf":
+            render_path = path.resolve()
         store.update_job(job_id, progress=68, stage="建立章节与内容块")
+        store.set_version_render(version_id, render_path)
         store.save_parsed(version_id, parsed)
         store.update_job(job_id, status="ready", progress=100, stage="完成", error=None)
     except Exception as exc:

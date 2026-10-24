@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from . import config, imports, parsers, store
+from . import config, converters, imports, parsers, store
 
 LEGACY_FILES = (
     "progress.json",
@@ -173,6 +173,46 @@ def migrate_if_needed() -> dict:
         "documents_mapped": len(mapping),
         **counts,
     }
+
+def ensure_render_paths() -> dict:
+    """为已有 PDF/DOCX/PPTX 当前版本补齐 PDF 播放文件，不切换版本。"""
+    updated = 0
+    failed: list[str] = []
+    for version in store.list_current_versions():
+        fmt = (version.get("source_format") or "").lower()
+        if fmt not in ("pdf", "docx", "pptx"):
+            continue
+        title = version.get("document_title") or version.get("document_id") or "未命名"
+        source = Path(version.get("source_path") or "")
+        if fmt == "pdf":
+            if source.is_file():
+                if version.get("rendered_path") != str(source):
+                    store.set_version_render(version["id"], source)
+                    updated += 1
+            else:
+                failed.append(f"{title}：原 PDF 不存在")
+            continue
+
+        rendered = Path(version.get("rendered_path") or "")
+        if rendered.is_file():
+            continue
+        if not source.is_file():
+            failed.append(f"{title}：原文件不存在，无法生成播放 PDF")
+            continue
+        try:
+            target = (
+                config.ORIGINALS_DIR
+                / version["document_id"]
+                / "rendered"
+                / f"{version['id']}.pdf"
+            )
+            converters.convert_to_pdf(source, target)
+            store.set_version_render(version["id"], target)
+            updated += 1
+        except Exception as exc:
+            failed.append(f"{title}：{exc}")
+    return {"updated": updated, "failed": failed}
+
 
 def normalize_markdown() -> int:
     """给旧版本已解析的内容块补上 Markdown 预览字段，不重新解析、不丢标注。"""

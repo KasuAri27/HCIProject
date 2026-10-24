@@ -9,3 +9,6 @@ pytesseract>=0.3
 
 # 打包工具（仅构建独立 exe 时需要，运行源码可不安）
 # pyinstaller>=6.0
+
+# Windows + 本机 Office：DOCX/PPTX 转 PDF 播放
+pywin32>=306; sys_platform == "win32"

@@ -1,7 +1,8 @@
-"""Flask 学习应用后端（第二阶段）。
+"""Flask 学习应用后端。
 
 文档、版本、章节、内容块、标注、阅读位置和全部学习记录都在 SQLite；
-导入与解析在后台任务中执行，前端轮询进度。
+导入与解析在后台任务中执行，前端轮询进度。PDF/DOCX/PPTX 以 PDF 版面
+播放，Markdown/TXT 渲染正文。
 """
 
 import threading
@@ -171,6 +172,20 @@ def _asset_dir(doc: dict) -> str:
     return "" if parent == "." else parent
 
 
+def _playable_pdf(version: dict | None) -> Path | None:
+    """返回当前版本可播放的 PDF：PDF 用原文件，DOCX/PPTX 用转换产物。"""
+    if not version:
+        return None
+    fmt = (version.get("source_format") or "").lower()
+    if fmt == "pdf":
+        path = Path(version.get("source_path") or "")
+    elif fmt in ("docx", "pptx"):
+        path = Path(version.get("rendered_path") or "")
+    else:
+        return None
+    return path if path.is_file() else None
+
+
 def _annotations_with_locators(doc_id: str, version_id: str, blocks: list[dict]) -> list[dict]:
     locators = {b.get("id"): b.get("locator_label") or "" for b in blocks}
     rows = store.list_annotations(doc_id, version_id)
@@ -268,6 +283,9 @@ def api_document(doc_id: str):
                 "chapters": [],
                 "annotations": [],
                 "position": None,
+                "view_mode": "markdown",
+                "pdf_url": "",
+                "pdf_missing": False,
                 "original_url": f"/api/documents/{doc_id}/original",
             }
         )
@@ -291,6 +309,9 @@ def api_document(doc_id: str):
                 "chapters": [],
                 "annotations": [],
                 "position": None,
+                "view_mode": "markdown",
+                "pdf_url": "",
+                "pdf_missing": False,
                 "original_url": f"/api/documents/{doc_id}/original",
             }
         )
@@ -301,6 +322,11 @@ def api_document(doc_id: str):
     position = store.get_position(doc_id)
     if position and position.get("version_id") != version_id:
         position = None
+    pdf_path = _playable_pdf(version)
+    pdf_url = (
+        f"/api/documents/{doc_id}/pdf?v={version_id}" if pdf_path is not None else ""
+    )
+    source_format = (version.get("source_format") or "").lower()
     return jsonify(
         {
             "document": brief,
@@ -312,6 +338,9 @@ def api_document(doc_id: str):
             "chapters": rendered["chapters"],
             "annotations": annotations,
             "position": position,
+            "view_mode": "pdf" if pdf_path is not None else "markdown",
+            "pdf_url": pdf_url,
+            "pdf_missing": source_format in ("pdf", "docx", "pptx") and pdf_path is None,
             "original_url": f"/api/documents/{doc_id}/original",
         }
     )
@@ -348,6 +377,26 @@ def _original_path(doc: dict) -> Path | None:
     if not any(path.is_relative_to(root) for root in allowed):
         return None
     return path
+
+
+@app.route("/api/documents/<doc_id>/pdf")
+def api_document_pdf(doc_id: str):
+    doc = store.get_document(doc_id)
+    if doc is None:
+        return jsonify({"error": "资料不存在"}), 404
+    version = store.get_version(doc.get("current_version_id") or "")
+    path = _playable_pdf(version)
+    if path is None:
+        return jsonify({"error": "播放文件不存在，请重新解析或转换"}), 404
+    name = Path(doc.get("source_name") or path.name).stem + ".pdf"
+    response = send_file(
+        path,
+        mimetype="application/pdf",
+        as_attachment=False,
+        download_name=name,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/api/documents/<doc_id>/original")
@@ -913,6 +962,7 @@ def bootstrap() -> dict:
     normalized = migrate.normalize_markdown()
     recovered = store.recover_interrupted_jobs()
     scan = imports.scan_library(background=True)
+    renders = migrate.ensure_render_paths()
     stats = store.overview()
     print(f"学习数据库：{config.DB_PATH}")
     print(f"资料库：{config.LIBRARY_DIR}（{stats['document_count']} 份文档）")
@@ -924,7 +974,11 @@ def bootstrap() -> dict:
         print(f"恢复了 {recovered} 个中断的解析任务")
     if scan.get("jobs"):
         print(f"正在解析 {len(scan['jobs'])} 个资料任务")
-    return {"migration": migration, "scan": scan, "overview": stats}
+    if renders.get("updated"):
+        print(f"已补齐 {renders['updated']} 份资料的 PDF 播放文件")
+    for failure in renders.get("failed") or []:
+        print(f"PDF 播放文件未生成：{failure}")
+    return {"migration": migration, "scan": scan, "renders": renders, "overview": stats}
 
 
 def run(host: str = "127.0.0.1", port: int = 5000, debug: bool = False) -> None:

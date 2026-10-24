@@ -11,6 +11,8 @@ let currentDoc = null;
 let currentContent = null;
 let currentVersionId = "";
 let currentBlocks = [];
+let currentViewMode = "markdown";
+let currentPdfUrl = "";
 let annotations = [];
 let selectedDocId = "";
 
@@ -119,6 +121,8 @@ const btnPrereq = $("btn-prereq");
 const docProgressBar = $("doc-progress-bar");
 const docScroll = $("doc-scroll");
 const docEmpty = $("doc-empty");
+const pdfView = $("pdf-view");
+const pdfFrame = $("pdf-frame");
 const docPage = $("doc-page");
 const docBody = $("doc-body");
 
@@ -596,6 +600,19 @@ async function focusBlock(blockId, docId = "") {
     showToast("资料尚未解析完成，暂时无法定位");
     return;
   }
+  if (currentViewMode === "pdf") {
+    const block = currentBlocks.find((item) => item.id === blockId);
+    const locator = (block && block.locator) || {};
+    const page = locator.page || locator.slide;
+    if (page && currentPdfUrl) {
+      const base = currentPdfUrl.split("#")[0];
+      pdfFrame.src = `${base}#page=${encodeURIComponent(page)}&zoom=page-width`;
+      showToast(`已定位到第 ${page} 页`);
+    } else {
+      showToast("已打开资料；PDF 播放模式无法精确定位该段");
+    }
+    return;
+  }
   const block = docBody.querySelector(
     `.doc-block[data-block-id="${CSS.escape(blockId)}"]`
   );
@@ -927,9 +944,13 @@ function renderDocView(data) {
   btnPrereq.disabled = data.status !== "ready";
   readLevelSelect.disabled = data.status !== "ready";
   readLevelSelect.value = (data.document && data.document.read_level) || "";
+  currentViewMode = data.view_mode === "pdf" ? "pdf" : "markdown";
+  currentPdfUrl = data.pdf_url || "";
   setPositionStatus("", "");
 
   if (data.status !== "ready") {
+    pdfView.hidden = true;
+    docScroll.classList.remove("is-pdf");
     docPage.hidden = true;
     docEmpty.hidden = false;
     renderStatusCard(data);
@@ -940,6 +961,31 @@ function renderDocView(data) {
     return;
   }
 
+  if (data.pdf_missing) {
+    docVersionNote.hidden = false;
+    docVersionNote.textContent =
+      "PDF 播放文件尚未生成，当前显示文本预览；可在资料柜重新解析或检查本机 Office。";
+  }
+
+  if (currentViewMode === "pdf") {
+    docEmpty.hidden = true;
+    docPage.hidden = true;
+    pdfView.hidden = false;
+    docScroll.classList.add("is-pdf");
+    btnReadSettings.hidden = true;
+    readSettings.hidden = true;
+    docBody.innerHTML = "";
+    pdfFrame.src = currentPdfUrl;
+    docProgressBar.style.width = "0";
+    setPositionStatus("", "PDF 播放模式 · 不记录滚动位置");
+    renderAnnotations();
+    return;
+  }
+
+  pdfView.hidden = true;
+  docScroll.classList.remove("is-pdf");
+  btnReadSettings.hidden = false;
+  pdfFrame.src = "about:blank";
   docEmpty.hidden = true;
   docPage.hidden = false;
   docBody.innerHTML = data.html || "";
@@ -1283,6 +1329,7 @@ function schedulePositionSave() {
 }
 
 async function savePositionNow(beacon = false) {
+  if (currentViewMode === "pdf") return;
   const position = collectPosition();
   if (!position || !currentDocId()) return;
   try {
@@ -1533,11 +1580,13 @@ function renderAnnotations() {
   if (!annotations.length) {
     const hasOldVersions =
       currentContent && (currentContent.versions || []).length > 1;
-    annotationsList.innerHTML = `<p class="empty">${
-      hasOldVersions
+    const emptyText =
+      currentViewMode === "pdf"
+        ? "PDF 播放模式暂不支持划选标注；已有标注仍保留在数据库。"
+        : hasOldVersions
         ? "当前版本还没有标注；旧版本的标注仍保留，但不会显示在这里。"
-        : "在正文里选中一段文字，点「高亮」，这里会出现标注。"
-    }</p>`;
+        : "在正文里选中一段文字，点「高亮」，这里会出现标注。";
+    annotationsList.innerHTML = `<p class="empty">${emptyText}</p>`;
     updateTabBadges();
     return;
   }
