@@ -180,6 +180,8 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertGreater(box["height"], 20)
 
     def configure_ai(self):
+        # 打开笔记会自动请求建议；隔离该 AI 传输边界，禁止真实模型联网。
+        self.page.route("**/api/notes/suggest", lambda route: route.fulfill(json={"suggestions": []}))
         response = self.context.request.post(self.server.url + "/api/config", data={
             "api_base": "http://127.0.0.1:1", "api_key": "ci-fixture", "model": "fixture",
         })
@@ -215,3 +217,4 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.page.locator("#notes-content").fill("失败后仍然能保存")
         self.page.locator("#btn-notes-save").click()
         expect(self.page.locator("#notes-save-status")).to_contain_text("已保存")
+
