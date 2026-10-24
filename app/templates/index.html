@@ -22,6 +22,8 @@
     <button type="button" id="btn-annot-toggle" class="icon-btn annot-toggle" title="显示或隐藏批注栏" aria-label="批注栏">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>批注
     </button>
+    <button type="button" id="btn-focus" class="icon-btn" title="专注阅读（Ctrl+Shift+F）" aria-label="专注阅读">专注</button>
+    <button type="button" id="btn-help" class="icon-btn" title="快捷键" aria-label="快捷键">?</button>
     <button type="button" id="llm-status" class="pill pill-warn" title="配置 AI 接口">AI 未配置</button>
     <button type="button" id="btn-refresh-library" class="btn" title="重新扫描 library/ 目录">刷新资料</button>
     <button type="button" id="btn-config" class="btn" title="配置 AI 接口">API 设置</button>
@@ -49,6 +51,8 @@
         <div class="foot-bar"><i id="read-bar"></i></div>
         <div class="foot-row foot-muted"><span>笔记</span><span id="note-count">0</span></div>
         <div class="foot-row foot-muted"><span>做过题</span><span id="exercise-count">0</span></div>
+        <div class="foot-row foot-muted"><span>理解自评</span><span id="understanding-count">0</span></div>
+        <div class="foot-row foot-muted"><span>练习记录</span><span id="practice-count">0</span></div>
       </div>
     </aside>
 
@@ -62,12 +66,35 @@
           <p class="doc-call" id="doc-call" title="资料在 library/ 中的位置"></p>
         </div>
         <div class="doc-head-side">
+          <span class="save-hint" id="position-status"></span>
           <span class="version-chip" id="doc-version" hidden></span>
           <a id="doc-original" class="btn btn-small" download hidden title="下载保留的原始文件，不在页面里展示源码">下载原文件</a>
+          <select id="read-level" class="read-level" title="阅读后的理解自评">
+            <option value="">读后自评</option>
+            <option value="理解">理解</option>
+            <option value="模糊">模糊</option>
+            <option value="不会">不会</option>
+          </select>
+          <button type="button" id="btn-read-settings" class="btn btn-small" title="字号与行距">Aa</button>
           <button type="button" id="btn-prereq" class="btn btn-small" disabled
             title="可选：让 AI 根据这份资料出几道阅读前的基础自评">前置自评</button>
         </div>
         <div class="doc-progress" aria-hidden="true"><i id="doc-progress-bar"></i></div>
+      </div>
+
+      <div class="read-settings" id="read-settings" hidden>
+        <label>字号
+          <button type="button" id="btn-font-dec" class="btn btn-small">A−</button>
+          <span id="font-size-label">17px</span>
+          <button type="button" id="btn-font-inc" class="btn btn-small">A+</button>
+        </label>
+        <label>行距
+          <select id="line-height">
+            <option value="1.6">紧凑</option>
+            <option value="1.85">舒适</option>
+            <option value="2.1">宽松</option>
+          </select>
+        </label>
       </div>
 
       <div class="doc-scroll" id="doc-scroll">
@@ -90,6 +117,12 @@
           <button type="button" class="bubble-close" id="select-bubble-close" title="关闭" aria-label="关闭">×</button>
         </div>
         <blockquote class="bubble-quote" id="select-bubble-quote"></blockquote>
+        <div class="bubble-modes">
+          <button type="button" id="btn-mode-explain" class="btn btn-small">解释</button>
+          <button type="button" id="btn-mode-example" class="btn btn-small">举例</button>
+          <button type="button" id="btn-mode-prereq" class="btn btn-small">补前置</button>
+          <button type="button" id="btn-mode-check" class="btn btn-small">理解检查</button>
+        </div>
         <textarea id="select-bubble-input" rows="2" spellcheck="false" placeholder="想问什么？留空就是「讲这段」"></textarea>
         <div class="bubble-actions">
           <button type="button" id="btn-spot-ask" class="btn btn-small btn-primary">现场问</button>
@@ -98,6 +131,17 @@
           <button type="button" id="btn-highlight" class="btn btn-small btn-quiet">高亮</button>
         </div>
         <div class="bubble-answer markdown" id="select-bubble-answer" hidden></div>
+        <div class="check-box" id="check-answer-wrap" hidden>
+          <textarea id="check-answer" rows="2" placeholder="写下你的理解，提交后由 AI 检查"></textarea>
+          <button type="button" id="btn-check-submit" class="btn btn-small btn-primary">提交检查</button>
+        </div>
+        <div class="check-feedback markdown" id="check-feedback" hidden></div>
+        <div class="self-rate" id="check-self-rate" hidden>
+          <span>你的理解自评：</span>
+          <button type="button" class="btn btn-small" data-level="理解">理解</button>
+          <button type="button" class="btn btn-small" data-level="模糊">模糊</button>
+          <button type="button" class="btn btn-small" data-level="不会">不会</button>
+        </div>
       </div>
 
       <div class="tabs" role="tablist" aria-label="批注">
@@ -135,7 +179,11 @@
       <section class="pane" id="pane-notes" role="tabpanel" aria-labelledby="tab-notes" hidden>
         <div class="pane-bar">
           <span class="save-state" id="notes-save-status"></span>
-          <button type="button" id="btn-notes-save" class="btn btn-small" disabled>保存笔记</button>
+          <span class="pane-actions">
+            <button type="button" id="btn-notes-undo" class="btn btn-small btn-quiet" disabled>撤销</button>
+            <button type="button" id="btn-notes-export" class="btn btn-small btn-quiet" disabled>导出</button>
+            <button type="button" id="btn-notes-save" class="btn btn-small" disabled>保存笔记</button>
+          </span>
         </div>
         <div class="pane-scroll">
           <p class="empty" id="notes-empty">打开一份资料后，这里写你自己的笔记。</p>
@@ -199,6 +247,13 @@
             <button type="button" id="btn-submit" class="btn btn-primary" disabled>提交批改</button>
           </div>
           <div class="review markdown" id="exercise-review"></div>
+          <div class="self-rate" id="exercise-self-rate" hidden>
+            <span>这次理解得怎么样？</span>
+            <button type="button" class="btn btn-small" data-level="理解">理解</button>
+            <button type="button" class="btn btn-small" data-level="模糊">模糊</button>
+            <button type="button" class="btn btn-small" data-level="不会">不会</button>
+            <span class="hint" id="exercise-evidence-status"></span>
+          </div>
           <button type="button" id="btn-exercise-next" class="btn btn-small" hidden>再来一题</button>
         </div>
       </section>
@@ -273,6 +328,22 @@
         <button type="button" id="btn-prereq-skip" class="btn btn-quiet">跳过</button>
         <span class="grow"></span>
         <button type="button" id="btn-prereq-submit" class="btn btn-primary">提交</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-mask" id="help-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <h3 id="help-title">快捷键</h3>
+      <ul class="shortcut-list">
+        <li><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 发送对话</li>
+        <li><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> 切换专注阅读</li>
+        <li><kbd>←</kbd> / <kbd>→</kbd> 切换批注标签（标签聚焦时）</li>
+        <li><kbd>Esc</kbd> 关闭气泡、弹窗或退出专注</li>
+        <li><kbd>?</kbd> 打开本帮助（不在输入框内时）</li>
+      </ul>
+      <div class="modal-actions">
+        <button type="button" id="btn-help-close" class="btn btn-primary">知道了</button>
       </div>
     </div>
   </div>

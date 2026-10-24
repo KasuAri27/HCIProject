@@ -1,18 +1,17 @@
 """出题与批改服务。
 
-当前主流程围绕用户打开的一份资料：把资料原文、资料对话、已出题摘要和
-上次批改要点组装成 prompt，调用 OpenAI 兼容接口生成题目或批改解答。
+资料上下文统一走 ai_context（带 block 引用），出题与批改返回的 Markdown
+会经过引用校验；前端可把 [cite:<block_id>] 渲染成可点击的原文引用。
 """
 
 from typing import Optional
 
-from . import api_config, llm, text_budget
+from . import ai_context, api_config, llm
 
 _SYSTEM_PROMPT = (
     "你是一位严谨的学习助教。\n"
-    "你只能依据下方提供的『当前资料原文』行事，不得凭记忆编造；\n"
-    "资料未覆盖的内容，明确说明『资料未覆盖』而不是编造；\n"
-    "使用简体中文，Markdown 格式输出。"
+    "只依据提供的当前资料行事，不得凭记忆编造；资料未覆盖要明说；\n"
+    "使用简体中文和 Markdown。"
 )
 
 _LAST_REVIEW_MAX_CHARS = 2000
@@ -60,20 +59,17 @@ def _difficulty_line(difficulty: str) -> str:
 def generate_exercise(
     doc_id: str,
     source_title: str,
-    source_text: str,
     difficulty: str = "",
     prior_questions: Optional[list] = None,
     chat_messages: Optional[list] = None,
     last_submission: Optional[dict] = None,
-) -> str:
+) -> tuple[str, list[dict]]:
     """基于当前资料生成一道练习题（一次一题）。"""
-    if not (source_text or "").strip():
-        raise ValueError("资料内容为空，无法出题")
-
-    sections = [
-        f"## 当前资料（出题依据）\n来源：{source_title or doc_id}\n\n"
-        f"{text_budget.truncate_source(source_text)}",
-    ]
+    context = ai_context.build_context(
+        doc_id,
+        question=f"{difficulty} {source_title} 练习",
+    )
+    sections = [f"## 当前资料（出题依据）\n来源：{source_title or doc_id}\n\n{context['text']}"]
     prior = prior_questions or []
     if prior:
         numbered = "\n".join(f"{i}. {q}" for i, q in enumerate(prior, start=1))
@@ -94,38 +90,37 @@ def generate_exercise(
         f"{_difficulty_line(difficulty)}\n"
         "4. 不要给出完整答案，只给关键提示；\n"
         "5. 题目开头用一行【题型：代码题 / 非代码题】标注题型，并在结尾给出『思考要点』小节，"
-        "指出解题时的易错点。"
+        "指出解题时的易错点。题目可以引用原文块，但不要编造。"
     )
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": "\n\n".join(sections) + task},
     ]
-    return llm.chat(messages, **api_config.llm_kwargs())
+    reply = llm.chat(messages, **api_config.llm_kwargs())
+    return ai_context.clean_citations(reply, context)
 
 
 def review_submission(
     doc_id: str,
     source_title: str,
-    source_text: str,
     question: str,
     code: str,
-) -> str:
+) -> tuple[str, list[dict]]:
     """批改基于当前资料出的题目解答。"""
-    if not (source_text or "").strip():
-        raise ValueError("资料内容为空，无法批改")
-
+    context = ai_context.build_context(doc_id, question=question, quote=code[:2000])
     user_content = (
-        f"## 当前资料（批改依据）\n来源：{source_title or doc_id}\n\n"
-        f"{text_budget.truncate_source(source_text)}\n\n"
+        f"## 当前资料（批改依据）\n来源：{source_title or doc_id}\n\n{context['text']}\n\n"
         f"【本题题目】\n{question}\n\n"
         f"【学生提交的解答】\n```\n{code}\n```\n\n"
         "请批改这份解答：\n"
-        "1. 先判断对错，并指出资料哪一段能对上或哪里对不上；\n"
+        "1. 先判断对错，并指出资料哪一段能对上或哪里对不上，能对应原文的地方加 "
+        "[cite:<block_id>]；\n"
         "2. 给出正确理解；改进建议（代码题指运行/逻辑，理论题指推导/结论）；\n"
-        "3. 不要贴完整参考答案，只给思路要点。"
+        "3. 不要贴完整参考答案，只给思路要点；补充解释用「补充：」开头。"
     )
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
         {"role": "user", "content": user_content},
     ]
-    return llm.chat(messages, **api_config.llm_kwargs())
+    reply = llm.chat(messages, **api_config.llm_kwargs())
+    return ai_context.clean_citations(reply, context)

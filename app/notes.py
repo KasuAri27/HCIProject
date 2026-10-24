@@ -5,7 +5,7 @@
 
 from typing import Any, Optional
 
-from . import api_config, explainer, llm, progress, store, text_budget
+from . import ai_context, api_config, explainer, llm, progress, store
 
 _MAX_CHAT_MESSAGES = 10
 
@@ -120,17 +120,14 @@ def _format_chat_excerpt(messages: list) -> str:
 
 
 def _build_observation_context(doc_id: str, quote: str) -> str:
-    text = store.document_text(doc_id)
-    if not text.strip():
-        raise ValueError("资料内容为空或尚未解析完成")
-    truncated = text_budget.truncate_source(text, quote)
+    context = ai_context.build_context(doc_id, question=quote, quote=quote)
     note = store.get_note(doc_id)
     messages = store.get_chat(doc_id)
     submission_hint = explainer.format_last_submission_hint(
         progress.get_last_submission(doc_id), doc_id
     )
     parts = [
-        f"【当前资料原文】\n{truncated}",
+        f"【当前资料原文（引用编号）】\n{context['text']}",
         f"【用户已写笔记标题】\n{note.get('title') or '（无）'}",
         f"【用户已写笔记正文】\n{note.get('content') or '（尚未写笔记）'}",
         f"【当前资料最近对话（最多 {_MAX_CHAT_MESSAGES} 条）】\n"

@@ -6,7 +6,7 @@
 import datetime
 from typing import Any, Optional
 
-from . import api_config, llm, store, text_budget
+from . import ai_context, api_config, llm, store
 
 FOUR_LEVELS = ["不会", "了解", "能用", "熟悉"]
 
@@ -98,11 +98,10 @@ def generate(doc_id: str) -> dict:
     doc = store.get_document(doc_id)
     if doc is None:
         raise ValueError("资料不存在")
-    text = store.document_text(doc_id)
-    if not text.strip():
-        raise ValueError("资料内容为空或尚未解析完成")
-    truncated = text_budget.truncate_source(text)
-    user_content = f"【当前资料】\n标题：{doc.get('title') or ''}\n\n{truncated}"
+    context = ai_context.build_context(doc_id, question="前置基础")
+    user_content = (
+        f"【当前资料（引用编号）】\n标题：{doc.get('title') or ''}\n\n{context['text']}"
+    )
     reply = llm.chat(
         [
             {"role": "system", "content": PREREQ_SYSTEM},
