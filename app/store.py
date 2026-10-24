@@ -15,6 +15,7 @@ import sqlite3
 import threading
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional
 
 from . import config
@@ -50,6 +51,7 @@ CREATE TABLE IF NOT EXISTS document_versions (
     source_format TEXT NOT NULL,
     content_hash  TEXT,
     markdown      TEXT,
+    rendered_path TEXT,
     status        TEXT NOT NULL DEFAULT 'queued',
     error         TEXT,
     created_at    TEXT NOT NULL,
@@ -250,10 +252,27 @@ def _conn():
         conn.close()
 
 
-def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> bool:
     columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+        return True
+    return False
+
+
+def _backup_database(conn: sqlite3.Connection, prefix: str) -> Optional[Path]:
+    """用 SQLite backup API 在结构升级前留一份可恢复副本。"""
+    try:
+        config.BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        target = config.BACKUP_DIR / f"{prefix}-{datetime.now():%Y%m%d-%H%M%S}.db"
+        dst = sqlite3.connect(target)
+        try:
+            conn.backup(dst)
+        finally:
+            dst.close()
+        return target
+    except Exception:
+        return None
 
 
 def init_db() -> None:
@@ -265,8 +284,11 @@ def init_db() -> None:
             _ensure_column(conn, "document_versions", "markdown", "TEXT")
             _ensure_column(conn, "blocks", "markdown", "TEXT")
             _ensure_column(conn, "read_records", "self_level", "TEXT NOT NULL DEFAULT ''")
+            added_render = _ensure_column(conn, "document_versions", "rendered_path", "TEXT")
+            if added_render:
+                _backup_database(conn, "phase4-render")
             conn.execute(
-                "INSERT INTO app_state(key, value) VALUES('schema_version', '4') "
+                "INSERT INTO app_state(key, value) VALUES('schema_version', '5') "
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
             )
 
@@ -423,6 +445,8 @@ def create_version(
             "current_version_id = COALESCE(current_version_id, ?) WHERE id = ?",
             (source_format, now, version_id, doc_id),
         )
+        if version_no > 1:
+            conn.execute("DELETE FROM prereq_cache WHERE document_id = ?", (doc_id,))
     return version_id
 
 
@@ -442,6 +466,37 @@ def latest_version(doc_id: str) -> Optional[dict]:
             (doc_id,),
         ).fetchone()
     return _dict(row)
+
+
+def list_versions(doc_id: str) -> list[dict]:
+    """按版本号倒序列出资料版本（旧版本保留用于核对引用）。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id, version_no, status, source_format, created_at, parsed_at, error "
+            "FROM document_versions WHERE document_id = ? ORDER BY version_no DESC",
+            (doc_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_current_versions() -> list[dict]:
+    """列出所有文档当前且已就绪的版本，供启动时补齐 PDF 播放文件。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT v.*, d.title AS document_title FROM document_versions v "
+            "JOIN documents d ON d.id = v.document_id "
+            "WHERE d.current_version_id = v.id AND v.status = 'ready'"
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def set_version_render(version_id: str, path) -> None:
+    """记录该版本用于播放的 PDF 路径。"""
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE document_versions SET rendered_path = ? WHERE id = ?",
+            (str(path) if path else None, version_id),
+        )
 
 
 def set_version_status(version_id: str, status: str, error: Optional[str] = None) -> None:

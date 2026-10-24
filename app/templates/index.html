@@ -17,8 +17,8 @@
     <span class="brand">学习助手</span>
     <span class="crumb" id="topbar-crumb" hidden></span>
     <span class="grow"></span>
-    <button type="button" id="btn-import" class="btn btn-primary" title="导入 Markdown、TXT、DOCX 或文本型 PDF">导入资料</button>
-    <input id="import-input" type="file" accept=".md,.markdown,.txt,.docx,.pdf" multiple hidden>
+    <button type="button" id="btn-import" class="btn btn-primary" title="导入 Markdown、TXT、DOCX、PPTX 或 PDF">导入资料</button>
+    <input id="import-input" type="file" accept=".md,.markdown,.txt,.docx,.pptx,.pdf" multiple hidden>
     <button type="button" id="btn-annot-toggle" class="icon-btn annot-toggle" title="显示或隐藏批注栏" aria-label="批注栏">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>批注
     </button>
@@ -40,7 +40,14 @@
         <h2 class="rail-title">资料柜<span class="badge" id="library-count">0</span></h2>
       </div>
       <div class="rail-search">
-        <input id="library-search" type="search" placeholder="搜索资料名或路径" autocomplete="off" spellcheck="false" aria-label="搜索资料">
+        <input id="library-search" type="search" placeholder="搜索资料名或正文" autocomplete="off" spellcheck="false" aria-label="搜索资料名或正文">
+      </div>
+      <div class="search-panel" id="search-panel" hidden>
+        <div class="search-head">
+          <span class="field-label" id="search-summary" style="margin:0">全文检索</span>
+          <button type="button" id="btn-ask-cross" class="btn btn-small btn-primary" title="用当前关键词跨资料提问">跨资料提问</button>
+        </div>
+        <div class="search-results" id="search-results"></div>
       </div>
       <div class="rail-alert" id="library-alert" hidden></div>
       <div class="rail-body" id="library-tree">
@@ -81,6 +88,7 @@
         </div>
         <div class="doc-progress" aria-hidden="true"><i id="doc-progress-bar"></i></div>
       </div>
+      <div class="version-note" id="doc-version-note" hidden></div>
 
       <div class="read-settings" id="read-settings" hidden>
         <label>字号
@@ -99,6 +107,9 @@
 
       <div class="doc-scroll" id="doc-scroll">
         <div class="doc-empty" id="doc-empty"></div>
+        <div class="pdf-view" id="pdf-view" hidden>
+          <iframe id="pdf-frame" title="PDF 播放"></iframe>
+        </div>
         <article class="doc-page" id="doc-page" hidden>
           <div class="doc-body markdown" id="doc-body"></div>
         </article>

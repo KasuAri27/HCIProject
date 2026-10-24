@@ -11,13 +11,14 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from . import config, parsers, source, store
+from . import config, converters, parsers, source, store
 
 ALLOWED_FORMATS = {
     ".md": "md",
     ".markdown": "md",
     ".txt": "txt",
     ".docx": "docx",
+    ".pptx": "pptx",
     ".pdf": "pdf",
 }
 
@@ -78,7 +79,7 @@ def import_upload(file_storage) -> dict:
     original_name = _now_name(getattr(file_storage, "filename", "") or "upload")
     fmt = format_for_name(original_name)
     if fmt is None:
-        raise ValueError("只支持 Markdown、TXT、DOCX 和文本型 PDF")
+        raise ValueError("只支持 Markdown、TXT、DOCX、PPTX 和 PDF")
 
     data = file_storage.read()
     if not data:
@@ -332,12 +333,26 @@ def process_job(job_id: str) -> None:
         if not path.is_file():
             raise parsers.ParseError("原文件不存在")
         store.update_job(job_id, progress=25, stage="解析内容")
+        doc_id = job.get("document_id") or ""
         parsed = parsers.parse_document(
             path,
             job.get("source_format") or path.suffix.lstrip("."),
             title_for_name(job.get("source_name") or path.name),
+            asset_dir=(config.ORIGINALS_DIR / doc_id / "assets") if doc_id else None,
+            asset_url_prefix=f"/api/documents/{doc_id}/assets/" if doc_id else "",
         )
+        fmt = (job.get("source_format") or path.suffix.lstrip(".")).lower()
+        render_path = None
+        if fmt in ("docx", "pptx"):
+            store.update_job(job_id, progress=55, stage="生成 PDF 播放文件")
+            render_path = converters.convert_to_pdf(
+                path,
+                config.ORIGINALS_DIR / doc_id / "rendered" / f"{version_id}.pdf",
+            )
+        elif fmt == "pdf":
+            render_path = path.resolve()
         store.update_job(job_id, progress=68, stage="建立章节与内容块")
+        store.set_version_render(version_id, render_path)
         store.save_parsed(version_id, parsed)
         store.update_job(job_id, status="ready", progress=100, stage="完成", error=None)
     except Exception as exc:

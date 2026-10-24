@@ -11,6 +11,8 @@ let currentDoc = null;
 let currentContent = null;
 let currentVersionId = "";
 let currentBlocks = [];
+let currentViewMode = "markdown";
+let currentPdfUrl = "";
 let annotations = [];
 let selectedDocId = "";
 
@@ -50,7 +52,12 @@ let positionStatusTimer = null;
 let readFontSize = 17;
 let readLineHeight = 1.85;
 
-const FORMAT_LABEL = { md: "MD", txt: "TXT", docx: "DOCX", pdf: "PDF" };
+/** block_id -> {doc_id, title, locator}，用于跨文档引用跳转 */
+let citeDocs = {};
+let searchTimer = null;
+let searchSeq = 0;
+
+const FORMAT_LABEL = { md: "MD", txt: "TXT", docx: "DOCX", pptx: "PPTX", pdf: "PDF" };
 const DEEPSEEK_DEFAULTS = {
   api_base: "https://api.deepseek.com",
   model: "deepseek-v4-flash",
@@ -85,6 +92,10 @@ const libraryCount = $("library-count");
 const librarySearch = $("library-search");
 const libraryAlert = $("library-alert");
 const libraryTree = $("library-tree");
+const searchPanel = $("search-panel");
+const searchSummary = $("search-summary");
+const searchResults = $("search-results");
+const btnAskCross = $("btn-ask-cross");
 const readRatio = $("read-ratio");
 const readBar = $("read-bar");
 const noteCountEl = $("note-count");
@@ -96,6 +107,7 @@ const docHead = $("doc-head");
 const docTitle = $("doc-title");
 const docCall = $("doc-call");
 const docVersion = $("doc-version");
+const docVersionNote = $("doc-version-note");
 const docOriginal = $("doc-original");
 const positionStatusEl = $("position-status");
 const readLevelSelect = $("read-level");
@@ -109,6 +121,8 @@ const btnPrereq = $("btn-prereq");
 const docProgressBar = $("doc-progress-bar");
 const docScroll = $("doc-scroll");
 const docEmpty = $("doc-empty");
+const pdfView = $("pdf-view");
+const pdfFrame = $("pdf-frame");
 const docPage = $("doc-page");
 const docBody = $("doc-body");
 
@@ -242,6 +256,14 @@ function escapeHtml(s) {
   const div = document.createElement("div");
   div.textContent = String(s ?? "");
   return div.innerHTML;
+}
+
+function escapeAttr(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function llmConfigured() {
@@ -446,6 +468,165 @@ function renderLibrary() {
   libraryTree.appendChild(frag);
 }
 
+// ------------------------------------------------------------
+// 全文检索与跨资料提问
+// ------------------------------------------------------------
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function highlightSnippet(text, keywords) {
+  const escaped = escapeHtml(text);
+  if (!keywords || !keywords.length) return escaped;
+  const terms = [...keywords]
+    .sort((a, b) => b.length - a.length)
+    .map((kw) => escapeRegExp(escapeHtml(kw)))
+    .filter(Boolean);
+  if (!terms.length) return escaped;
+  try {
+    return escaped.replace(new RegExp(`(${terms.join("|")})`, "gi"), "<mark>$1</mark>");
+  } catch (e) {
+    return escaped;
+  }
+}
+
+function scheduleSearch() {
+  clearTimeout(searchTimer);
+  const query = (librarySearch.value || "").trim();
+  if (!query) {
+    searchSeq += 1;
+    searchPanel.hidden = true;
+    searchResults.innerHTML = "";
+    return;
+  }
+  searchTimer = setTimeout(runFullTextSearch, 320);
+}
+
+async function runFullTextSearch() {
+  const query = (librarySearch.value || "").trim();
+  if (!query) {
+    searchPanel.hidden = true;
+    return;
+  }
+  const seq = ++searchSeq;
+  searchPanel.hidden = false;
+  searchResults.innerHTML = '<p class="empty">检索中…</p>';
+  try {
+    const data = await api(`/api/search?q=${encodeURIComponent(query)}&limit=12`);
+    if (seq !== searchSeq) return;
+    renderSearchResults(data);
+  } catch (e) {
+    if (seq !== searchSeq) return;
+    searchResults.innerHTML = `<p class="empty">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderSearchResults(data) {
+  const results = data.results || [];
+  searchSummary.textContent = results.length
+    ? `全文检索 · ${results.length} 条`
+    : "全文检索 · 无结果";
+  if (!results.length) {
+    searchResults.innerHTML =
+      '<p class="empty">没有匹配正文的内容。可以换个关键词，或点「跨资料提问」让助教检索。</p>';
+    return;
+  }
+  searchResults.innerHTML = "";
+  for (const hit of results) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "search-hit";
+    item.dataset.docId = hit.document_id || "";
+    item.dataset.blockId = hit.block_id || "";
+    const head = document.createElement("span");
+    head.className = "search-hit-head";
+    head.textContent = `《${hit.title || "未命名"}》 · ${hit.locator || hit.chapter_title || ""}`;
+    const body = document.createElement("span");
+    body.className = "search-hit-snippet";
+    body.innerHTML = highlightSnippet(hit.snippet || "", data.keywords);
+    item.append(head, body);
+    item.addEventListener("click", () => openSearchHit(hit));
+    searchResults.appendChild(item);
+  }
+}
+
+async function openSearchHit(hit) {
+  await focusBlock(hit.block_id, hit.document_id);
+}
+
+async function askAcrossDocuments() {
+  const query = (librarySearch.value || "").trim();
+  if (!query) return showToast("先输入关键词");
+  if (!llmConfigured()) {
+    showToast("请先配置 API；全文检索仍然可用");
+    return;
+  }
+  openRightRail();
+  switchTab("chat");
+  chatMessages.push({ role: "user", content: `跨资料：${query}`, via: "ask" });
+  chatMessages.push({ role: "assistant", content: "正在检索并回答…", pending: true });
+  renderChat();
+  try {
+    const data = await postJson("/api/ask", { query });
+    for (const citation of data.citations || []) {
+      citeDocs[citation.block_id] = citation;
+    }
+    chatMessages.pop();
+    chatMessages.push({
+      role: "assistant",
+      content: data.answer || "",
+      via: "ask",
+      sources: data.sources || [],
+    });
+    renderChat();
+  } catch (e) {
+    chatMessages.pop();
+    chatMessages.push({
+      role: "assistant",
+      content: `跨资料提问失败：${e.message}`,
+      via: "ask",
+    });
+    renderChat();
+    showToast(e.message, 5000);
+  }
+}
+
+async function focusBlock(blockId, docId = "") {
+  if (!blockId) return;
+  if (docId && docId !== currentDocId()) {
+    await loadDocument(docId, { markOpen: true });
+  }
+  if (!ready()) {
+    showToast("资料尚未解析完成，暂时无法定位");
+    return;
+  }
+  if (currentViewMode === "pdf") {
+    const block = currentBlocks.find((item) => item.id === blockId);
+    const locator = (block && block.locator) || {};
+    const page = locator.page || locator.slide;
+    if (page && currentPdfUrl) {
+      const base = currentPdfUrl.split("#")[0];
+      pdfFrame.src = `${base}#page=${encodeURIComponent(page)}&zoom=page-width`;
+      showToast(`已定位到第 ${page} 页`);
+    } else {
+      showToast("已打开资料；PDF 播放模式无法精确定位该段");
+    }
+    return;
+  }
+  const block = docBody.querySelector(
+    `.doc-block[data-block-id="${CSS.escape(blockId)}"]`
+  );
+  if (!block) {
+    showToast("这条引用来自旧版本，当前资料已更新，原文无法定位");
+    return;
+  }
+  block.scrollIntoView({ behavior: "smooth", block: "center" });
+  block.classList.remove("cite-flash");
+  void block.offsetWidth;
+  block.classList.add("cite-flash");
+  setTimeout(() => block.classList.remove("cite-flash"), 1600);
+}
+
 function buildDocRow(doc) {
   const row = document.createElement("div");
   row.className = "file";
@@ -611,7 +792,11 @@ async function refreshLibrary() {
   }
 }
 
-librarySearch.addEventListener("input", renderLibrary);
+librarySearch.addEventListener("input", () => {
+  renderLibrary();
+  scheduleSearch();
+});
+if (btnAskCross) btnAskCross.addEventListener("click", askAcrossDocuments);
 btnRefreshLibrary.addEventListener("click", refreshLibrary);
 
 // ------------------------------------------------------------
@@ -731,14 +916,41 @@ function renderDocView(data) {
   topbarCrumb.textContent = (data.document && (data.document.source_name || data.document.title)) || "";
   docVersion.hidden = !(data.version && data.version.number);
   docVersion.textContent = data.version && data.version.number ? `v${data.version.number}` : "";
+  const versions = data.versions || [];
+  if (docVersion) {
+    docVersion.title = versions.length
+      ? versions
+          .map((v) => `v${v.version_no} · ${v.status}${v.parsed_at ? ` · ${v.parsed_at}` : ""}`)
+          .join("\n")
+      : "当前版本";
+  }
+  if (docVersionNote) {
+    if (versions.length > 1) {
+      const oldVersions = versions
+        .slice(1)
+        .map((v) => `v${v.version_no}`)
+        .join("、");
+      docVersionNote.hidden = false;
+      docVersionNote.textContent = `资料已更新到 v${
+        (data.version && data.version.number) || ""
+      }；旧版本（${oldVersions}）已保留，旧标注与 AI 引用可能无法定位到当前版本。`;
+    } else {
+      docVersionNote.hidden = true;
+      docVersionNote.textContent = "";
+    }
+  }
   docOriginal.hidden = !data.original_url;
   docOriginal.href = data.original_url || "#";
   btnPrereq.disabled = data.status !== "ready";
   readLevelSelect.disabled = data.status !== "ready";
   readLevelSelect.value = (data.document && data.document.read_level) || "";
+  currentViewMode = data.view_mode === "pdf" ? "pdf" : "markdown";
+  currentPdfUrl = data.pdf_url || "";
   setPositionStatus("", "");
 
   if (data.status !== "ready") {
+    pdfView.hidden = true;
+    docScroll.classList.remove("is-pdf");
     docPage.hidden = true;
     docEmpty.hidden = false;
     renderStatusCard(data);
@@ -749,6 +961,31 @@ function renderDocView(data) {
     return;
   }
 
+  if (data.pdf_missing) {
+    docVersionNote.hidden = false;
+    docVersionNote.textContent =
+      "PDF 播放文件尚未生成，当前显示文本预览；可在资料柜重新解析或检查本机 Office。";
+  }
+
+  if (currentViewMode === "pdf") {
+    docEmpty.hidden = true;
+    docPage.hidden = true;
+    pdfView.hidden = false;
+    docScroll.classList.add("is-pdf");
+    btnReadSettings.hidden = true;
+    readSettings.hidden = true;
+    docBody.innerHTML = "";
+    pdfFrame.src = currentPdfUrl;
+    docProgressBar.style.width = "0";
+    setPositionStatus("", "PDF 播放模式 · 不记录滚动位置");
+    renderAnnotations();
+    return;
+  }
+
+  pdfView.hidden = true;
+  docScroll.classList.remove("is-pdf");
+  btnReadSettings.hidden = false;
+  pdfFrame.src = "about:blank";
   docEmpty.hidden = true;
   docPage.hidden = false;
   docBody.innerHTML = data.html || "";
@@ -1092,6 +1329,7 @@ function schedulePositionSave() {
 }
 
 async function savePositionNow(beacon = false) {
+  if (currentViewMode === "pdf") return;
   const position = collectPosition();
   if (!position || !currentDocId()) return;
   try {
@@ -1340,8 +1578,15 @@ async function createHighlight() {
 function renderAnnotations() {
   annotCount.textContent = annotations.length ? `${annotations.length} 条` : "";
   if (!annotations.length) {
-    annotationsList.innerHTML =
-      '<p class="empty">在正文里选中一段文字，点「高亮」，这里会出现标注。</p>';
+    const hasOldVersions =
+      currentContent && (currentContent.versions || []).length > 1;
+    const emptyText =
+      currentViewMode === "pdf"
+        ? "PDF 播放模式暂不支持划选标注；已有标注仍保留在数据库。"
+        : hasOldVersions
+        ? "当前版本还没有标注；旧版本的标注仍保留，但不会显示在这里。"
+        : "在正文里选中一段文字，点「高亮」，这里会出现标注。";
+    annotationsList.innerHTML = `<p class="empty">${emptyText}</p>`;
     updateTabBadges();
     return;
   }
@@ -1455,17 +1700,42 @@ function renderChat() {
   chatMessagesEl.innerHTML = chatMessages
     .map((m) => {
       const isUser = m.role === "user";
+      const roleLabel = isUser ? "你" : m.via === "ask" ? "助教 · 跨资料" : "助教";
+      if (m.pending) {
+        return `<div class="msg msg-ai">
+          <p class="msg-role">${roleLabel}</p>
+          <div class="loading">检索并回答中…</div>
+        </div>`;
+      }
+      const sources =
+        !isUser && m.sources && m.sources.length
+          ? `<p class="msg-sources">来源：${m.sources
+              .map(
+                (s) =>
+                  `<button type="button" class="source-link" data-doc-id="${escapeAttr(
+                    s.document_id || ""
+                  )}">${escapeHtml(s.title || "未命名")}</button>`
+              )
+              .join(" · ")}</p>`
+          : "";
       return `<div class="msg ${isUser ? "msg-you" : "msg-ai"}">
-        <p class="msg-role">${isUser ? "你" : "助教"}</p>
+        <p class="msg-role">${roleLabel}</p>
         ${isUser && m.quote ? `<blockquote class="msg-quote">${escapeHtml(m.quote)}</blockquote>` : ""}
         <div class="msg-body ${isUser ? "" : "markdown"}">${
           isUser ? `<p>${escapeHtml(m.content || "")}</p>` : renderMarkdown(m.content || "")
         }</div>
+        ${sources}
       </div>`;
     })
     .join("");
   attachCopyButtons(chatMessagesEl);
   typesetMath(chatMessagesEl);
+  chatMessagesEl.querySelectorAll(".source-link").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const docId = btn.dataset.docId;
+      if (docId) loadDocument(docId, { markOpen: true });
+    });
+  });
   chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
   updateTabBadges();
 }
@@ -1715,23 +1985,14 @@ if (checkSelfRate) {
   });
 }
 
-document.addEventListener("click", (e) => {
+document.addEventListener("click", async (e) => {
   const cite = e.target.closest("a.cite");
   if (!cite) return;
   e.preventDefault();
   const blockId = cite.dataset.blockId;
-  const block = docBody.querySelector(
-    `.doc-block[data-block-id="${CSS.escape(blockId)}"]`
-  );
-  if (!block) {
-    showToast("引用对应的原文块不在当前版本中");
-    return;
-  }
-  block.scrollIntoView({ behavior: "smooth", block: "center" });
-  block.classList.remove("cite-flash");
-  void block.offsetWidth;
-  block.classList.add("cite-flash");
-  setTimeout(() => block.classList.remove("cite-flash"), 1600);
+  const meta = citeDocs[blockId] || {};
+  const docId = cite.dataset.docId || meta.doc_id || "";
+  await focusBlock(blockId, docId);
 });
 btnQuoteNote.addEventListener("click", async () => {
   if (!selection) return showToast("先划一段原文");
@@ -2081,9 +2342,13 @@ async function loadLearningEvidence(docId) {
       markSelfRate(exerciseSelfRate, latest.self_level || "");
     }
     if (exerciseEvidenceStatus) {
-      exerciseEvidenceStatus.textContent = latest.created_at
-        ? `最近一次练习 · ${latest.created_at}`
-        : "最近一次练习";
+      if (latest.version_id && currentVersionId && latest.version_id !== currentVersionId) {
+        exerciseEvidenceStatus.textContent = "最近一次练习来自旧版本";
+      } else {
+        exerciseEvidenceStatus.textContent = latest.created_at
+          ? `最近一次练习 · ${latest.created_at}`
+          : "最近一次练习";
+      }
     }
   } catch (e) {
     /* 学习记录读取失败不影响阅读与出题 */
@@ -2690,7 +2955,14 @@ function renderMarkdown(md) {
   let result = out.join("\n");
   result = result.replace(/(<li>.*?<\/li>\s*)+/gs, (m) => `<ul>${m}</ul>`);
   result = result.replace(/\[cite:([0-9a-fA-F]{8,})\]/g, (_all, blockId) => {
-    return `<a href="#block-${blockId}" class="cite" data-block-id="${blockId}">原文</a>`;
+    const meta = citeDocs[blockId] || {};
+    const title = meta.title
+      ? `来源：${meta.title}${meta.locator ? ` · ${meta.locator}` : ""}`
+      : "原文";
+    const docAttr = meta.doc_id ? ` data-doc-id="${escapeAttr(meta.doc_id)}"` : "";
+    return `<a href="#block-${blockId}" class="cite" data-block-id="${blockId}"${docAttr} title="${escapeAttr(
+      title
+    )}">原文</a>`;
   });
   return result;
 }

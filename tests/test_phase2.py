@@ -66,6 +66,7 @@ class BaseTest(unittest.TestCase):
             patch.object(config, "BACKUP_DIR", self.tmp / "db" / "backups"),
             patch.object(api_config, "CONFIG_PATH", self.tmp / "db" / "api_config.json"),
             patch("app.imports.start_job", side_effect=self._run_job),
+            patch("app.converters.convert_to_pdf", side_effect=self._fake_convert),
         ]
         for p in self._patchers:
             p.start()
@@ -76,6 +77,15 @@ class BaseTest(unittest.TestCase):
 
     def _run_job(self, job_id):
         imports.process_job(job_id)
+
+    def _fake_convert(self, source, target):
+        target = Path(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        pdf = canvas.Canvas(str(target))
+        pdf.drawString(72, 720, "converted")
+        pdf.showPage()
+        pdf.save()
+        return target
 
     def tearDown(self):
         for p in reversed(self._patchers):
@@ -137,6 +147,15 @@ class ImportTests(BaseTest):
             self.assertTrue(doc["html"])
             self.assertEqual(doc["version"]["source_format"], fmt)
             self.assertTrue(doc["blocks"])
+            expected_view = "markdown" if fmt in ("md", "txt") else "pdf"
+            self.assertEqual(doc["view_mode"], expected_view, fmt)
+            self.assertTrue(doc["pdf_url"] if expected_view == "pdf" else not doc["pdf_url"])
+            if expected_view == "pdf":
+                playable = self.client.get(doc["pdf_url"])
+                self.assertEqual(playable.status_code, 200)
+                self.assertEqual(playable.mimetype, "application/pdf")
+                self.assertIn(b"%PDF", playable.data[:5])
+                playable.close()
 
         documents = self.docs()
         self.assertEqual(len(documents), 4)

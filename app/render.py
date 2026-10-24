@@ -45,7 +45,7 @@ def _block_html(block: dict, source_format: str, asset_dir: str) -> str:
     is_markdown = source_format in ("md", "markdown")
 
     if markdown:
-        if btype in ("heading", "paragraph", "list", "quote"):
+        if btype in ("heading", "paragraph", "list", "quote", "image"):
             return source.render_markdown(markdown, asset_dir=asset_dir)
 
     if btype == "heading":
