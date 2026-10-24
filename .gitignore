@@ -5,14 +5,11 @@ __pycache__/
 build/
 dist/
 
-db/api_config.json
-db/progress.json
-db/chapter_chats.json
-db/chapter_notes.json
-db/prereq.json
+db/*.json
+db/*.json.tmp
+db/*.db
+db/*.db-*
 db/guide_image_cache/
-db/learning.db
-db/learning.db-*
 db/originals/
 db/backups/
 .uitest/
@@ -24,3 +21,11 @@ library/*
 .pytest_cache/
 Thumbs.db
 .DS_Store
+node_modules/
+test-results/
+playwright-report/
+*.log
+.env
+.env.*
+!.env.example
+!.env.sample
