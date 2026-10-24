@@ -33,9 +33,17 @@ class CommitMessageStandardTests(unittest.TestCase):
         for message in messages:
             self.assertTrue(commit_check.validate_subject(message), message)
 
-    def test_skips_merge_and_revert_prefix(self):
-        self.assertEqual(commit_check.validate_subject("Merge branch 'main'"), [])
-        self.assertEqual(commit_check.validate_subject('Revert "feat(import): 支持导入"'), [])
+    def test_prefixes_cannot_bypass_validation(self):
+        for message in ("Merge arbitrary", 'Revert "feat(import): 支持导入"', ""):
+            self.assertTrue(commit_check.validate_subject(message), message)
+
+    def test_requires_concrete_chinese_summary(self):
+        for message in ("feat: fix bug", "feat: 更新代码", "chore: 杂项", "feat:   "):
+            self.assertTrue(commit_check.validate_subject(message), message)
+
+    def test_scope_does_not_satisfy_chinese_summary(self):
+        self.assertTrue(commit_check.validate_subject("feat(api): add provider"))
+        self.assertEqual(commit_check.validate_subject("feat(api): 支持 OpenAI 接口"), [])
 
 
 class RepoLayoutTests(unittest.TestCase):
@@ -60,6 +68,31 @@ class RepoLayoutTests(unittest.TestCase):
             "db/backups/phase2-20261022/progress.json",
         ]
         self.assertEqual(len(layout_check.find_violations(paths)), 5)
+
+    def test_rejects_all_runtime_database_files(self):
+        paths = [
+            "db/api_config.json",
+            "db/api_config.json.tmp",
+            "db/profile.json",
+            "db/memory.json",
+            "db/other.db",
+            "db/other.db-wal",
+        ]
+        self.assertEqual(len(layout_check.find_violations(paths)), len(paths))
+
+    def test_rejects_nested_secrets_and_generated_files(self):
+        paths = [
+            ".qoder-credits/cache.json", "app/.env", "app/.env.local",
+            "scripts/frontend/node_modules/eslint/package.json", "nested/dist/app.js",
+            "app/__pycache__/web.pyc", "certs/private.pem", "test-results/trace.zip",
+        ]
+        self.assertEqual(len(layout_check.find_violations(paths)), len(paths))
+
+    def test_allows_secret_free_examples_and_source_fixtures(self):
+        self.assertEqual(layout_check.find_violations([
+            "docs/.env.example", "docs/.env.sample", "tests/fixtures/input.txt",
+            "scripts/frontend/package.json", ".github/gitleaks.toml",
+        ]), [])
 
 
 if __name__ == "__main__":

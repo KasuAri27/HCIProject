@@ -1,0 +1,40 @@
+name: Delete merged branch
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  delete-source:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref != github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # 仅执行可信默认分支中的脚本，不检出或执行 PR 代码。
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const branch = pr.head.ref;
+            if (branch === context.payload.repository.default_branch || branch === 'main') {
+              throw new Error('拒绝删除默认分支');
+            }
+            const ref = `heads/${branch}`;
+            try {
+              const { data } = await github.rest.git.getRef({ owner, repo, ref });
+              if (data.object.sha !== pr.head.sha) {
+                throw new Error('来源分支在合并后已有新提交，停止自动删除');
+              }
+              await github.rest.git.deleteRef({ owner, repo, ref });
+              core.info(`已删除合并后的来源分支：${branch}`);
+            } catch (error) {
+              if (error.status === 404) core.info('来源分支已删除');
+              else throw error;
+            }

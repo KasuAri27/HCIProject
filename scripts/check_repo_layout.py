@@ -10,6 +10,7 @@
 
 import subprocess
 import sys
+from pathlib import PurePosixPath
 
 ROOT_ALLOWED = {
     ".gitattributes",
@@ -17,31 +18,39 @@ ROOT_ALLOWED = {
     "README.md",
     "requirements.txt",
     "requirements-dev.txt",
+    "requirements-browser.txt",
     "ruff.toml",
     "pyproject.toml",
 }
 
-FORBIDDEN_PREFIXES = (
-    "db/originals/",
-    "db/backups/",
-    "db/learning.db",
-    "db/guide_image_cache/",
-)
-
-FORBIDDEN_FILES = {
-    "db/api_config.json",
-    "db/progress.json",
-    "db/chapter_chats.json",
-    "db/chapter_notes.json",
-    "db/prereq.json",
+FORBIDDEN_PREFIXES = ("db/", ".qoder-credits/")
+FORBIDDEN_PARTS = {
+    "__pycache__", ".ruff_cache", ".pytest_cache", ".venv", "venv",
+    "node_modules", "build", "dist", ".uitest", "test-results", "playwright-report",
 }
+SECRET_SUFFIXES = {".pem", ".key", ".p12", ".pfx"}
 
 
 def find_violations(paths: list[str]) -> list[str]:
     """返回不合规路径的说明列表。"""
     violations: list[str] = []
     for path in paths:
-        if path in FORBIDDEN_FILES or path.startswith(FORBIDDEN_PREFIXES):
+        parts = PurePosixPath(path).parts
+        name = parts[-1] if parts else ""
+        if (
+            any(part in FORBIDDEN_PARTS for part in parts)
+            or name in {".DS_Store", "Thumbs.db"}
+            or name.endswith((".pyc", ".pyo", ".log"))
+        ):
+            violations.append(f"{path} 是缓存、依赖或构建产物，不应提交")
+            continue
+        if (
+            (name == ".env" or name.startswith(".env."))
+            and name not in {".env.example", ".env.sample"}
+        ) or PurePosixPath(path).suffix.lower() in SECRET_SUFFIXES:
+            violations.append(f"{path} 可能包含本机密钥，不应提交")
+            continue
+        if path.startswith(FORBIDDEN_PREFIXES):
             violations.append(f"{path} 是本地运行时数据，不应提交")
             continue
         if path.startswith("library/") and path != "library/.gitkeep":
@@ -57,7 +66,7 @@ def find_violations(paths: list[str]) -> list[str]:
 
 def _tracked_files() -> list[str]:
     result = subprocess.run(
-        ["git", "ls-files"],
+        ["git", "-c", "core.quotepath=false", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -65,7 +74,7 @@ def _tracked_files() -> list[str]:
     )
     if result.returncode != 0:
         raise RuntimeError(result.stderr.strip() or "git ls-files 执行失败")
-    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    return sorted(set(path for path in result.stdout.split("\0") if path))
 
 
 def main() -> int:
@@ -80,7 +89,7 @@ def main() -> int:
         for item in violations:
             print(f"  - {item}")
         return 1
-    print(f"仓库布局检查通过（{len(paths)} 个受版本控制的文件）。")
+    print(f"仓库布局检查通过（{len(paths)} 个版本控制候选文件）。")
     return 0
 
 

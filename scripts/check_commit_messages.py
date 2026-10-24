@@ -32,7 +32,7 @@ SUBJECT_RE = re.compile(
 )
 
 MAX_SUBJECT_CHARS = 50
-SKIP_PREFIXES = ("Merge ", "Revert ")
+VAGUE_SUMMARIES = {"更新代码", "更新", "杂项", "修改代码", "修复问题", "测试", "调整", "优化"}
 RANGE_FALLBACK_COUNT = 30
 
 
@@ -45,10 +45,10 @@ def parse_subject(subject: str):
 
 
 def validate_subject(subject: str) -> list[str]:
-    """校验单条提交摘要，返回错误列表；跳过合并/自动 revert 提交。"""
+    """校验普通提交或 PR 标题；merge 由 git log --no-merges 识别。"""
     subject = (subject or "").strip()
-    if not subject or subject.startswith(SKIP_PREFIXES):
-        return []
+    if not subject:
+        return ["提交摘要不能为空"]
     errors: list[str] = []
     parsed = parse_subject(subject)
     if parsed is None:
@@ -56,6 +56,12 @@ def validate_subject(subject: str) -> list[str]:
             "格式应为 <type>(<scope>): <中文摘要>，type 只能是 "
             + "/".join(ALLOWED_TYPES)
         )
+    else:
+        summary = parsed[2].strip()
+        if not re.search(r"[\u3400-\u4dbf\u4e00-\u9fff]", summary):
+            errors.append("摘要必须包含中文动作说明")
+        if summary in VAGUE_SUMMARIES:
+            errors.append("摘要过于空泛，请说明具体改动")
     if len(subject) > MAX_SUBJECT_CHARS:
         errors.append(f"摘要不超过 {MAX_SUBJECT_CHARS} 个字符，当前 {len(subject)}")
     if subject.endswith(("。", ".", "，", ",")):
