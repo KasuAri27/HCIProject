@@ -635,6 +635,46 @@ body.sheet-page {
   line-height: 1;
   letter-spacing: -0.02em;
 }
+.user-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+}
+.avatar-column {
+  flex-shrink: 0;
+}
+.profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  overflow: hidden;
+  font-family: var(--font-doc);
+  font-size: 38px;
+  color: var(--warn);
+  background: var(--warn-wash);
+  border: 1px solid rgba(169, 116, 27, 0.32);
+  border-radius: 50%;
+}
+.profile-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.avatar-tools {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.avatar-tools .text-btn {
+  font-size: 11px;
+  color: var(--page-accent);
+}
+.plate-copy {
+  min-width: 0;
+}
 .plate-goal {
   max-width: 36ch;
   margin-top: 14px;
@@ -700,6 +740,11 @@ body.sheet-page {
   .user-ledger {
     grid-template-columns: 1fr;
     gap: 24px;
+  }
+  .profile-avatar {
+    width: 76px;
+    height: 76px;
+    font-size: 30px;
   }
   .user-form {
     padding-top: 20px;

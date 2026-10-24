@@ -271,8 +271,10 @@ class FrontendPhase3Tests(unittest.TestCase):
     def test_phase3_dom_ids_exist(self):
         html = (Path(config.APP_DIR) / "app" / "templates" / "index.html").read_text(encoding="utf-8")
         for element_id in (
-            "btn-focus",
-            "btn-help",
+            "btn-settings",
+            "btn-avatar",
+            "topbar-avatar-img",
+            "topbar-avatar-initial",
             "help-modal",
             "btn-help-close",
             "position-status",

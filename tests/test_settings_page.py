@@ -18,6 +18,7 @@ class SettingsPageTests(BaseTest):
             "line-height-group",
             "btn-reset-learning",
             "btn-reading-reset",
+            "btn-rescan-library",
         ):
             self.assertIn(f'id="{element_id}"', html, element_id)
         self.assertIn("快捷键", html)

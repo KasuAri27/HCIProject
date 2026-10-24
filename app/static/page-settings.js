@@ -89,6 +89,27 @@ function disarmReset() {
   resetButton.classList.remove("is-armed");
 }
 
+document.getElementById("btn-rescan-library").addEventListener("click", async () => {
+  const button = document.getElementById("btn-rescan-library");
+  button.disabled = true;
+  button.textContent = "扫描中…";
+  try {
+    const data = await pageJson("/api/library/scan", "POST", {});
+    const scan = data.scan || {};
+    pageToast(
+      scan.jobs
+        ? `已登记 ${scan.registered || 0} 个文件，正在解析 ${scan.jobs} 个资料`
+        : `已登记 ${scan.registered || 0} 个文件`
+    );
+    await loadDataSummary();
+  } catch (error) {
+    pageToast(error.message, "err");
+  } finally {
+    button.disabled = false;
+    button.textContent = "重新扫描";
+  }
+});
+
 resetButton.addEventListener("click", async () => {
   if (!resetArmed) {
     resetArmed = true;

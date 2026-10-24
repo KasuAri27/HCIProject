@@ -5,8 +5,10 @@
 播放，Markdown/TXT 渲染正文。
 """
 
+import base64
 import json
 import threading
+from io import BytesIO
 from pathlib import Path
 
 from flask import Flask, abort, jsonify, render_template, request, send_file, send_from_directory
@@ -920,6 +922,23 @@ def api_prereq_answer():
 # 配置 / 重置
 # ------------------------------------------------------------
 
+def _profile_payload() -> dict:
+    try:
+        profile = json.loads(store.get_state("user_profile", "{}") or "{}")
+    except (TypeError, ValueError):
+        profile = {}
+    if not isinstance(profile, dict):
+        profile = {}
+    avatar = store.get_state("user_avatar", "") or ""
+    if not avatar.startswith("data:image/"):
+        avatar = ""
+    return {
+        "display_name": str(profile.get("display_name") or ""),
+        "goal": str(profile.get("goal") or ""),
+        "avatar": avatar,
+    }
+
+
 @app.route("/api/profile", methods=["GET", "POST"])
 def api_profile():
     if request.method == "POST":
@@ -932,21 +951,48 @@ def api_profile():
             return jsonify({"error": "学习目标不超过 200 个字"}), 400
         profile = {"display_name": display_name, "goal": goal}
         store.set_state("user_profile", json.dumps(profile, ensure_ascii=False))
-        return jsonify({"ok": True, "profile": profile})
+        return jsonify({"ok": True, "profile": _profile_payload()})
+    return jsonify({"profile": _profile_payload()})
+
+
+@app.route("/api/profile/avatar", methods=["POST", "DELETE"])
+def api_profile_avatar():
+    if request.method == "DELETE":
+        store.set_state("user_avatar", "")
+        return jsonify({"ok": True, "avatar": ""})
+
+    uploaded = request.files.get("file")
+    if uploaded is None:
+        return jsonify({"error": "缺少头像文件"}), 400
+    data = uploaded.read()
+    if not data:
+        return jsonify({"error": "头像文件为空"}), 400
+    if len(data) > 2 * 1024 * 1024:
+        return jsonify({"error": "头像不能超过 2 MB"}), 400
     try:
-        profile = json.loads(store.get_state("user_profile", "{}") or "{}")
-    except (TypeError, ValueError):
-        profile = {}
-    if not isinstance(profile, dict):
-        profile = {}
-    return jsonify(
-        {
-            "profile": {
-                "display_name": str(profile.get("display_name") or ""),
-                "goal": str(profile.get("goal") or ""),
-            }
-        }
+        from PIL import Image, ImageOps
+    except ImportError:
+        return jsonify({"error": "缺少 Pillow，无法处理头像"}), 400
+    try:
+        image = Image.open(BytesIO(data))
+        image.load()
+        if image.width * image.height > 50_000_000:
+            return jsonify({"error": "头像尺寸过大"}), 400
+        image = ImageOps.exif_transpose(image)
+        image.thumbnail((256, 256))
+        if image.mode not in ("RGB", "RGBA"):
+            image = image.convert(
+                "RGBA" if "transparency" in image.info else "RGB"
+            )
+        output = BytesIO()
+        image.save(output, format="PNG", optimize=True)
+    except Exception:
+        return jsonify({"error": "头像需要是 PNG、JPEG 或 WebP 图片"}), 400
+    avatar = "data:image/png;base64," + base64.b64encode(output.getvalue()).decode(
+        "ascii"
     )
+    store.set_state("user_avatar", avatar)
+    return jsonify({"ok": True, "avatar": avatar})
 
 
 @app.route("/api/config", methods=["GET"])

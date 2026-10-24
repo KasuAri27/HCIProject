@@ -5,9 +5,24 @@
 {% block content %}
 <section class="user-ledger">
   <div class="user-plate">
-    <p class="plate-label">本地档案</p>
-    <h1 id="user-name">读者</h1>
-    <p class="plate-goal" id="user-goal">把读过的资料，变成自己的笔记。</p>
+    <div class="user-identity">
+      <div class="avatar-column">
+        <div class="profile-avatar" id="profile-avatar">
+          <img id="profile-avatar-img" alt="" hidden>
+          <span id="profile-avatar-initial" aria-hidden="true">读</span>
+        </div>
+        <div class="avatar-tools">
+          <label class="text-btn" for="avatar-input">更换头像</label>
+          <input id="avatar-input" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+          <button type="button" class="text-btn" id="btn-avatar-remove" hidden>移除</button>
+        </div>
+      </div>
+      <div class="plate-copy">
+        <p class="plate-label">本地档案</p>
+        <h1 id="user-name">读者</h1>
+        <p class="plate-goal" id="user-goal">把读过的资料，变成自己的笔记。</p>
+      </div>
+    </div>
     <p class="plate-note">资料、API Key 与学习记录只保存在这台电脑。</p>
   </div>
   <form class="user-form" id="profile-form">

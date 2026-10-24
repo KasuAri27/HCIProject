@@ -22,16 +22,15 @@
     <button type="button" id="btn-annot-toggle" class="icon-btn annot-toggle" title="显示或隐藏批注栏" aria-label="批注栏">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>批注
     </button>
-    <button type="button" id="btn-focus" class="icon-btn" title="专注阅读（Ctrl+Shift+F）" aria-label="专注阅读">专注</button>
-    <button type="button" id="btn-help" class="icon-btn" title="快捷键" aria-label="快捷键">?</button>
     <div class="model-switch">
       <button type="button" id="llm-status" class="pill pill-warn" title="切换首页使用的模型" aria-haspopup="menu" aria-expanded="false">模型未配置</button>
       <div class="model-menu" id="model-menu" role="menu" hidden></div>
     </div>
-    <button type="button" id="btn-refresh-library" class="btn" title="重新扫描 library/ 目录">刷新资料</button>
-    <button type="button" id="btn-workspace" class="btn btn-quiet" title="用户与设置">用户</button>
-    <button type="button" id="btn-config" class="btn" title="管理模型服务">API 配置</button>
-    <button type="button" id="btn-reset" class="btn btn-quiet" title="清空学习记录，保留资料与 API 配置">重置</button>
+    <a id="btn-settings" class="btn" href="/settings" title="工作台设置">设置</a>
+    <a id="btn-avatar" class="topbar-avatar" href="/user" title="个人主页" aria-label="个人主页">
+      <img id="topbar-avatar-img" alt="" hidden>
+      <span id="topbar-avatar-initial" aria-hidden="true">读</span>
+    </a>
   </header>
 
   <div class="job-strip" id="job-strip" hidden></div>

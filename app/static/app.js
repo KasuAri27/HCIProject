@@ -67,18 +67,15 @@ const $ = (id) => document.getElementById(id);
 
 const btnRailToggle = $("btn-rail-toggle");
 const btnAnnotToggle = $("btn-annot-toggle");
-const btnFocus = $("btn-focus");
-const btnHelp = $("btn-help");
-const helpModal = $("help-modal");
 const btnHelpClose = $("btn-help-close");
+const helpModal = $("help-modal");
 const topbarCrumb = $("topbar-crumb");
 const btnImport = $("btn-import");
 const importInput = $("import-input");
 const btnLlmStatus = $("llm-status");
-const btnRefreshLibrary = $("btn-refresh-library");
-const btnConfig = $("btn-config");
-const btnWorkspace = $("btn-workspace");
-const btnReset = $("btn-reset");
+const btnAvatar = $("btn-avatar");
+const topbarAvatarImg = $("topbar-avatar-img");
+const topbarAvatarInitial = $("topbar-avatar-initial");
 const modelMenu = $("model-menu");
 const jobStrip = $("job-strip");
 
@@ -754,7 +751,6 @@ async function maybeReloadCurrentDoc() {
 }
 
 async function refreshLibrary() {
-  btnRefreshLibrary.disabled = true;
   try {
     const payload = await api("/api/library/scan", { method: "POST" });
     applyLibrary(payload);
@@ -770,8 +766,6 @@ async function refreshLibrary() {
     }
   } catch (e) {
     showToast(e.message, 5000);
-  } finally {
-    btnRefreshLibrary.disabled = false;
   }
 }
 
@@ -780,7 +774,6 @@ librarySearch.addEventListener("input", () => {
   scheduleSearch();
 });
 if (btnAskCross) btnAskCross.addEventListener("click", askAcrossDocuments);
-btnRefreshLibrary.addEventListener("click", refreshLibrary);
 
 // ------------------------------------------------------------
 // 导入
@@ -819,6 +812,7 @@ importInput.addEventListener("change", async () => {
 // 文档
 // ------------------------------------------------------------
 async function loadPage() {
+  loadTopbarProfile();
   try {
     const [sessionData, libraryData] = await Promise.all([
       api("/api/session"),
@@ -1028,7 +1022,6 @@ async function setReadLevel(level) {
 function toggleFocusMode(force) {
   const on = force === undefined ? !document.body.classList.contains("focus-mode") : force;
   document.body.classList.toggle("focus-mode", on);
-  if (btnFocus) btnFocus.textContent = on ? "退出专注" : "专注";
   if (on) showToast("专注阅读：Ctrl+Shift+F 或 Esc 退出", 2600);
 }
 
@@ -1070,8 +1063,6 @@ if (lineHeightSelect) {
 if (readLevelSelect) {
   readLevelSelect.addEventListener("change", () => setReadLevel(readLevelSelect.value));
 }
-if (btnFocus) btnFocus.addEventListener("click", () => toggleFocusMode());
-if (btnHelp) btnHelp.addEventListener("click", showHelp);
 if (btnHelpClose) btnHelpClose.addEventListener("click", closeHelp);
 if (helpModal) {
   helpModal.addEventListener("mousedown", (e) => {
@@ -2604,6 +2595,32 @@ function closeConfirm(result) {
 btnConfirmCancel.addEventListener("click", () => closeConfirm(false));
 btnConfirmOk.addEventListener("click", () => closeConfirm(true));
 
+function renderTopbarAvatar(profile) {
+  if (!btnAvatar || !topbarAvatarImg || !topbarAvatarInitial) return;
+  const name = (profile.display_name || "").trim();
+  const initial = name ? [...name][0] : "读";
+  topbarAvatarInitial.textContent = initial;
+  if (profile.avatar) {
+    topbarAvatarImg.src = profile.avatar;
+    topbarAvatarImg.hidden = false;
+    topbarAvatarInitial.hidden = true;
+  } else {
+    topbarAvatarImg.hidden = true;
+    topbarAvatarImg.removeAttribute("src");
+    topbarAvatarInitial.hidden = false;
+  }
+  btnAvatar.title = name ? `${name} · 个人主页` : "个人主页";
+}
+
+async function loadTopbarProfile() {
+  try {
+    const data = await api("/api/profile");
+    renderTopbarAvatar(data.profile || {});
+  } catch (e) {
+    /* 档案读取失败不影响阅读 */
+  }
+}
+
 let modelState = null;
 
 function usableModels() {
@@ -2695,14 +2712,6 @@ async function toggleModelMenu(force) {
   btnLlmStatus.setAttribute("aria-expanded", "true");
 }
 
-btnConfig.addEventListener("click", () => {
-  window.location.href = "/api-config";
-});
-if (btnWorkspace) {
-  btnWorkspace.addEventListener("click", () => {
-    window.location.href = "/user";
-  });
-}
 btnLlmStatus.addEventListener("click", () => toggleModelMenu());
 if (modelMenu) {
   modelMenu.addEventListener("click", async (event) => {
@@ -2728,21 +2737,6 @@ document.addEventListener("mousedown", (event) => {
   if (!modelMenu || modelMenu.hidden) return;
   if (modelMenu.contains(event.target) || btnLlmStatus.contains(event.target)) return;
   toggleModelMenu(false);
-});
-
-btnReset.addEventListener("click", async () => {
-  const ok = await showConfirm(
-    "确认重置？",
-    "会清空已读、题目、全部对话、笔记、标注和阅读位置；文档、原文件和 API 配置保留。"
-  );
-  if (!ok) return;
-  try {
-    await postJson("/api/reset", {});
-    await loadPage();
-    showToast("学习记录已重置，文档和 API 配置保留");
-  } catch (e) {
-    showToast(e.message, 5000);
-  }
 });
 
 // ------------------------------------------------------------
