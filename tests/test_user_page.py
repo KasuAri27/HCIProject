@@ -31,15 +31,16 @@ class ProfileTests(BaseTest):
 
 
 class UserPageTests(BaseTest):
-    def test_user_page_renders_services_and_profile(self):
+    def test_user_page_keeps_profile_and_drops_api_management(self):
         response = self.client.get("/user")
         self.assertEqual(response.status_code, 200)
         html = response.get_data(as_text=True)
         self.assertIn("读者档案", html)
-        self.assertIn('id="service-list"', html)
         self.assertIn('id="profile-form"', html)
-        self.assertIn('id="custom-form"', html)
-        self.assertIn("/api-config", html)
+        self.assertIn('class="page-back-btn"', html)
+        self.assertNotIn("API 服务", html)
+        self.assertNotIn('id="service-list"', html)
+        self.assertNotIn('id="custom-form"', html)
 
 
 if __name__ == "__main__":

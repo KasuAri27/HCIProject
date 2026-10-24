@@ -9,10 +9,12 @@
 </head>
 <body class="sheet-page page-{{ active_page }}">
   <header class="page-top">
+    <a class="page-back-btn" href="/" aria-label="返回阅读台" title="返回阅读台">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
+    </a>
     <a class="page-brand" href="/">学习助手</a>
     <span class="page-crumb">{% block crumb %}工作台{% endblock %}</span>
     <span class="page-grow"></span>
-    <a class="page-back" href="/">回到阅读台</a>
   </header>
 
   <div class="sheet-shell">

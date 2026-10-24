@@ -51,31 +51,42 @@ body.sheet-page {
 .page-grow {
   flex: 1;
 }
-.page-back {
-  font-size: 12.5px;
+.page-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
   color: var(--ink-2);
   text-decoration: none;
-  border-bottom: 1px solid var(--rule);
+  border-radius: 3px;
 }
-.page-back:hover {
+.page-back-btn:hover {
   color: var(--page-accent);
-  border-bottom-color: var(--page-accent);
+  background: var(--panel);
+}
+.page-back-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .sheet-shell {
-  display: grid;
-  grid-template-columns: 176px minmax(0, 1fr);
-  gap: 56px;
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 46px 32px 96px;
+  padding: 46px 48px 96px 236px;
 }
 
 .sheet-index {
-  position: sticky;
-  top: 92px;
-  align-self: start;
+  position: fixed;
+  top: 88px;
+  bottom: 32px;
+  left: 32px;
+  width: 168px;
   padding-left: 18px;
+  overflow-y: auto;
   border-left: 1px solid var(--rule);
 }
 .index-title {
@@ -117,7 +128,9 @@ body.sheet-page {
 }
 
 .sheet-main {
+  max-width: 980px;
   min-width: 0;
+  margin: 0 auto;
   animation: sheet-settle 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @keyframes sheet-settle {
@@ -533,17 +546,21 @@ body.sheet-page {
     padding: 0 18px;
   }
   .sheet-shell {
-    grid-template-columns: 1fr;
-    gap: 28px;
     padding: 28px 18px 72px;
   }
   .sheet-index {
     position: static;
     display: flex;
     gap: 18px;
+    width: auto;
     padding: 0 0 12px;
+    overflow: visible;
     border-left: 0;
     border-bottom: 1px solid var(--rule);
+  }
+  .sheet-main {
+    max-width: none;
+    margin: 0;
   }
   .index-title,
   .index-note {
@@ -668,103 +685,6 @@ body.sheet-page {
   font-size: 11.5px;
   color: var(--ink-3);
 }
-.service-section {
-  margin-top: 48px;
-}
-.section-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--ink);
-}
-.section-head h2 {
-  font-family: var(--font-doc);
-  font-size: 30px;
-  font-weight: 600;
-}
-.section-head .section-note {
-  max-width: 52ch;
-  margin-top: 6px;
-}
-.text-link {
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--page-accent);
-  text-decoration: none;
-  border-bottom: 1px solid var(--page-accent);
-}
-.text-link:hover {
-  color: var(--accent-2);
-}
-.service-list {
-  margin-top: 4px;
-}
-.service-row {
-  border-bottom: 1px solid var(--rule-soft);
-}
-.service-line {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 18px;
-  padding: 14px 0;
-}
-.service-main {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  min-width: 0;
-}
-.service-main h3 {
-  flex-shrink: 0;
-  font-size: 14.5px;
-  font-weight: 600;
-}
-.service-meta {
-  overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--ink-3);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.service-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 12px;
-}
-.service-actions .text-btn {
-  white-space: nowrap;
-}
-.service-state {
-  font-size: 11px;
-  color: var(--ink-3);
-  white-space: nowrap;
-}
-.service-state.is-ok {
-  color: var(--ok);
-}
-.service-state.is-warn {
-  color: var(--warn);
-}
-.service-edit {
-  display: grid;
-  grid-template-columns: 1.5fr 1.5fr auto auto;
-  align-items: end;
-  gap: 16px;
-  padding: 0 0 16px 15px;
-}
-.service-edit .field input {
-  font-size: 12.5px;
-}
-.subhead {
-  margin-top: 34px;
-  font-size: 15px;
-  font-weight: 600;
-}
 .page-footnote {
   margin-top: 48px;
   padding-top: 16px;
@@ -799,22 +719,6 @@ body.sheet-page {
   }
   .stat-cell:nth-child(n + 3) {
     border-top: 1px solid var(--rule-soft);
-  }
-  .section-head {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
-  }
-  .service-line {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-  .service-actions {
-    flex-wrap: wrap;
-  }
-  .service-edit {
-    grid-template-columns: 1fr;
-    padding-left: 0;
   }
 }
 
