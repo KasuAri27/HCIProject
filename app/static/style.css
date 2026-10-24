@@ -2120,3 +2120,77 @@ body.focus-mode .workbench {
     padding: 0;
   }
 }
+
+/* ---------- 首页模型切换 ---------- */
+.model-switch {
+  position: relative;
+  flex-shrink: 0;
+}
+#llm-status {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 80;
+  width: 280px;
+  max-height: 360px;
+  padding: 8px;
+  overflow-y: auto;
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+}
+.model-menu-group {
+  padding: 6px 6px 2px;
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.model-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.model-option:hover {
+  background: var(--panel);
+}
+.model-option.is-active {
+  color: var(--accent-2);
+  background: var(--accent-wash);
+}
+.model-option .model-name {
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.model-option .model-provider {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.model-menu-empty {
+  padding: 10px 8px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--ink-3);
+}
+.model-menu-link {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--accent);
+}

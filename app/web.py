@@ -60,6 +60,21 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/user")
+def page_user():
+    return render_template("user.html", active_page="user")
+
+
+@app.route("/api-config")
+def page_api_config():
+    return render_template("api_config.html", active_page="api")
+
+
+@app.route("/settings")
+def page_settings():
+    return render_template("settings.html", active_page="settings")
+
+
 @app.route("/library-assets/<path:filename>")
 def library_assets(filename: str):
     path = source.resolve_asset(filename)
@@ -504,7 +519,10 @@ def api_annotation(annotation_id: str):
     color = data.get("color")
     if note is not None and not isinstance(note, str):
         return jsonify({"error": "note 必须是字符串"}), 400
-    updated = store.update_annotation(annotation_id, note=note, color=color)
+    try:
+        updated = store.update_annotation(annotation_id, note=note, color=color)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if updated is None:
         return jsonify({"error": "标注不存在"}), 404
     return jsonify({"ok": True, "annotation": updated})
@@ -906,6 +924,89 @@ def api_config_get():
     return jsonify(api_config.public())
 
 
+@app.route("/api/providers")
+def api_providers():
+    return jsonify(api_config.public_state())
+
+
+@app.route("/api/providers", methods=["POST"])
+def api_provider_save():
+    data = request.get_json(silent=True) or {}
+    try:
+        provider = api_config.upsert_provider(data)
+    except api_config.APIError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(
+        {"ok": True, "provider": provider, "state": api_config.public_state()}
+    )
+
+
+@app.route("/api/providers/<provider_id>", methods=["DELETE"])
+def api_provider_delete(provider_id: str):
+    try:
+        deleted = api_config.delete_provider(provider_id)
+    except api_config.APIError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if not deleted:
+        return jsonify({"error": "服务不存在"}), 404
+    return jsonify({"ok": True, "state": api_config.public_state()})
+
+
+@app.route("/api/providers/<provider_id>/scan", methods=["POST"])
+def api_provider_scan(provider_id: str):
+    try:
+        provider = api_config.scan_models(provider_id)
+    except api_config.APIError as exc:
+        return jsonify({"error": str(exc)}), 502
+    return jsonify(
+        {"ok": True, "provider": provider, "state": api_config.public_state()}
+    )
+
+
+@app.route("/api/providers/<provider_id>/models", methods=["PATCH"])
+def api_provider_model(provider_id: str):
+    data = request.get_json(silent=True) or {}
+    model_id = str(data.get("model") or "").strip()
+    if not model_id or "enabled" not in data:
+        return jsonify({"error": "缺少 model 或 enabled"}), 400
+    try:
+        provider = api_config.set_model_enabled(
+            provider_id, model_id, bool(data.get("enabled"))
+        )
+    except api_config.APIError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(
+        {"ok": True, "provider": provider, "state": api_config.public_state()}
+    )
+
+
+@app.route("/api/active-model", methods=["POST"])
+def api_active_model():
+    data = request.get_json(silent=True) or {}
+    provider_id = str(data.get("provider_id") or "").strip()
+    model = str(data.get("model") or "").strip()
+    try:
+        active = api_config.set_active(provider_id, model)
+    except api_config.APIError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(
+        {
+            "ok": True,
+            "active": active,
+            "state": api_config.public_state(),
+            "llm_configured": api_config.is_configured(),
+        }
+    )
+
+
+@app.route("/api/models")
+def api_models():
+    state = api_config.public_state()
+    state["llm_configured"] = api_config.is_configured()
+    state["active_provider"] = api_config.effective()["provider_name"]
+    return jsonify(state)
+
+
 @app.route("/api/config", methods=["POST"])
 def api_config_post():
     data = request.get_json(silent=True) or {}
@@ -932,16 +1033,19 @@ def api_config_post():
         return jsonify({"error": "超时必须大于 0"}), 400
     if not 0 <= temperature <= 2:
         return jsonify({"error": "温度必须在 0~2 之间"}), 400
-    api_config.save(
-        {
-            "api_base": api_base,
-            "api_key": api_key,
-            "model": model or api_config.DEFAULT_CONFIG["model"],
-            "timeout": timeout,
-            "temperature": temperature,
-        },
-        clear_key=clear_key,
-    )
+    try:
+        api_config.save(
+            {
+                "api_base": api_base,
+                "api_key": api_key,
+                "model": model or api_config.DEFAULT_CONFIG["model"],
+                "timeout": timeout,
+                "temperature": temperature,
+            },
+            clear_key=clear_key,
+        )
+    except api_config.APIError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"ok": True, "configured": api_config.is_configured(), "config": api_config.public()})
 
 

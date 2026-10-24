@@ -58,12 +58,6 @@ let searchTimer = null;
 let searchSeq = 0;
 
 const FORMAT_LABEL = { md: "MD", txt: "TXT", docx: "DOCX", pptx: "PPTX", pdf: "PDF" };
-const DEEPSEEK_DEFAULTS = {
-  api_base: "https://api.deepseek.com",
-  model: "deepseek-v4-flash",
-  timeout: 180,
-  temperature: 0.7,
-};
 const SKILL_LEVELS = ["不会", "了解", "能用", "熟悉"];
 
 // ------------------------------------------------------------
@@ -83,7 +77,9 @@ const importInput = $("import-input");
 const btnLlmStatus = $("llm-status");
 const btnRefreshLibrary = $("btn-refresh-library");
 const btnConfig = $("btn-config");
+const btnWorkspace = $("btn-workspace");
 const btnReset = $("btn-reset");
+const modelMenu = $("model-menu");
 const jobStrip = $("job-strip");
 
 const railLeft = $("rail-left");
@@ -192,19 +188,6 @@ const confirmModalBody = $("confirm-modal-body");
 const btnConfirmCancel = $("btn-confirm-cancel");
 const btnConfirmOk = $("btn-confirm-ok");
 let confirmResolver = null;
-
-const configModal = $("config-modal");
-const cfgApiBase = $("cfg-api-base");
-const cfgApiKey = $("cfg-api-key");
-const cfgKeyHint = $("cfg-key-hint");
-const cfgClearWrap = $("cfg-clear-wrap");
-const cfgClearKey = $("cfg-clear-key");
-const cfgModel = $("cfg-model");
-const cfgTimeout = $("cfg-timeout");
-const cfgTemperature = $("cfg-temperature");
-const btnConfigDefault = $("btn-config-default");
-const btnConfigCancel = $("btn-config-cancel");
-const btnConfigSave = $("btn-config-save");
 
 const prereqModal = $("prereq-modal");
 const prereqFocus = $("prereq-focus");
@@ -1114,6 +1097,10 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Escape") {
+    if (modelMenu && !modelMenu.hidden) {
+      toggleModelMenu(false);
+      return;
+    }
     if (helpModal && !helpModal.hidden) {
       closeHelp();
       return;
@@ -2575,8 +2562,7 @@ function showPrereqModal(data) {
 async function openPrereq() {
   if (!ready()) return showToast("资料还没解析完成");
   if (!llmConfigured()) {
-    showToast("前置自评是可选的 AI 功能；配置 API 后才能用");
-    openConfig();
+    showToast("前置自评是可选的 AI 功能；请先在 API 配置页填写 Key 并启用模型");
     return;
   }
   btnPrereq.disabled = true;
@@ -2618,11 +2604,75 @@ function closeConfirm(result) {
 btnConfirmCancel.addEventListener("click", () => closeConfirm(false));
 btnConfirmOk.addEventListener("click", () => closeConfirm(true));
 
-function updateLlmStatus() {
-  const configured = llmConfigured();
-  btnLlmStatus.textContent = configured ? "AI 已就绪" : "AI 未配置 · 阅读不受影响";
-  btnLlmStatus.classList.toggle("pill-ok", configured);
-  btnLlmStatus.classList.toggle("pill-warn", !configured);
+let modelState = null;
+
+function usableModels() {
+  if (!modelState) return [];
+  const withKey = new Set(
+    (modelState.providers || [])
+      .filter((provider) => provider.has_key)
+      .map((provider) => provider.id)
+  );
+  return (modelState.enabled_models || []).filter((item) =>
+    withKey.has(item.provider_id)
+  );
+}
+
+function renderModelMenu() {
+  if (!modelMenu) return;
+  const enabled = usableModels();
+  if (!enabled.length) {
+    modelMenu.innerHTML =
+      '<p class="model-menu-empty">还没有填写 Key 的服务。<a class="model-menu-link" href="/api-config">去 API 配置</a></p>';
+    return;
+  }
+  const groups = new Map();
+  for (const item of enabled) {
+    const key = item.provider_name || item.provider_id || "服务";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  modelMenu.innerHTML = [...groups.entries()]
+    .map(
+      ([name, items]) => `<p class="model-menu-group">${escapeHtml(name)}</p>
+        ${items
+          .map(
+            (item) => `<button type="button" class="model-option${
+              item.active ? " is-active" : ""
+            }" role="menuitemradio" aria-checked="${item.active ? "true" : "false"}" data-provider-id="${escapeAttr(
+              item.provider_id
+            )}" data-model="${escapeAttr(item.model)}">
+              <span class="model-name">${escapeHtml(item.model)}</span>
+            </button>`
+          )
+          .join("")}`
+    )
+    .join("");
+}
+
+async function updateLlmStatus() {
+  let configured = llmConfigured();
+  try {
+    const data = await api("/api/models");
+    modelState = data;
+    configured = !!data.llm_configured;
+    if (session) session.llm_configured = configured;
+    const active = usableModels().find((item) => item.active);
+    if (active) {
+      btnLlmStatus.textContent = `${active.provider_name} · ${active.model}`;
+      btnLlmStatus.title = `首页模型：${active.provider_name} · ${active.model}`;
+    } else {
+      btnLlmStatus.textContent = "配置模型";
+      btnLlmStatus.title = "打开模型菜单";
+    }
+    btnLlmStatus.classList.toggle("pill-ok", configured && !!active);
+    btnLlmStatus.classList.toggle("pill-warn", !(configured && !!active));
+    if (modelMenu && !modelMenu.hidden) renderModelMenu();
+  } catch (e) {
+    btnLlmStatus.textContent = configured ? "AI 已就绪" : "配置模型";
+    btnLlmStatus.classList.toggle("pill-ok", configured);
+    btnLlmStatus.classList.toggle("pill-warn", !configured);
+  }
   const canAI = ready() && configured;
   btnChatSend.disabled = !canAI;
   btnNotesDraft.disabled = !canAI || !notesDocId;
@@ -2631,81 +2681,53 @@ function updateLlmStatus() {
   btnSubmit.disabled = !canAI || !questionCache;
 }
 
-function fillConfigForm(cfg) {
-  cfgApiBase.value = cfg.api_base || DEEPSEEK_DEFAULTS.api_base;
-  cfgApiKey.value = "";
-  if (cfg.has_key) {
-    cfgApiKey.placeholder = `已配置 ${cfg.api_key_masked || "****"}，留空保持不变`;
-    cfgKeyHint.textContent = "已保存 Key；页面只显示掩码，不会回显完整内容。";
-  } else {
-    cfgApiKey.placeholder = "sk-...";
-    cfgKeyHint.textContent = "密钥只保存在本机；不配置也可以离线阅读。";
+async function toggleModelMenu(force) {
+  if (!modelMenu) return;
+  const open = force === undefined ? modelMenu.hidden : force;
+  if (!open) {
+    modelMenu.hidden = true;
+    btnLlmStatus.setAttribute("aria-expanded", "false");
+    return;
   }
-  cfgClearWrap.hidden = !cfg.has_key;
-  cfgClearKey.checked = false;
-  cfgModel.value = cfg.model || DEEPSEEK_DEFAULTS.model;
-  cfgTimeout.value = cfg.timeout || DEEPSEEK_DEFAULTS.timeout;
-  cfgTemperature.value = cfg.temperature ?? DEEPSEEK_DEFAULTS.temperature;
+  if (!modelState) await updateLlmStatus();
+  renderModelMenu();
+  modelMenu.hidden = false;
+  btnLlmStatus.setAttribute("aria-expanded", "true");
 }
 
-async function openConfig() {
-  try {
-    fillConfigForm(await api("/api/config"));
-  } catch (e) {
-    fillConfigForm({ ...DEEPSEEK_DEFAULTS, has_key: false });
-    showToast(e.message, 5000);
-  }
-  configModal.hidden = false;
-}
-
-btnConfig.addEventListener("click", openConfig);
-btnLlmStatus.addEventListener("click", openConfig);
-btnConfigCancel.addEventListener("click", () => (configModal.hidden = true));
-btnConfigDefault.addEventListener("click", () => {
-  cfgApiBase.value = DEEPSEEK_DEFAULTS.api_base;
-  cfgModel.value = DEEPSEEK_DEFAULTS.model;
-  cfgTimeout.value = DEEPSEEK_DEFAULTS.timeout;
-  cfgTemperature.value = DEEPSEEK_DEFAULTS.temperature;
-  cfgApiKey.value = "";
-  cfgClearKey.checked = false;
-  if (cfgClearWrap.hidden) {
-    cfgApiKey.placeholder = "sk-...";
-    cfgKeyHint.textContent = "密钥只保存在本机；不配置也可以离线阅读。";
-  }
-  cfgApiKey.focus();
+btnConfig.addEventListener("click", () => {
+  window.location.href = "/api-config";
 });
-
-btnConfigSave.addEventListener("click", async () => {
-  const apiBase = cfgApiBase.value.trim();
-  const apiKey = cfgApiKey.value.trim();
-  if (!apiBase.startsWith("http://") && !apiBase.startsWith("https://")) {
-    return showToast("API 地址必须以 http:// 或 https:// 开头");
-  }
-  if (apiKey.startsWith("http://") || apiKey.startsWith("https://")) {
-    return showToast("API Key 是密钥，不要填网址到 Key 框");
-  }
-  if (cfgClearKey.checked && apiKey) {
-    return showToast("不能同时清除并填写新的 API Key");
-  }
-  btnConfigSave.disabled = true;
-  try {
-    const data = await postJson("/api/config", {
-      api_base: apiBase,
-      api_key: apiKey,
-      clear_key: cfgClearKey.checked,
-      model: cfgModel.value.trim(),
-      timeout: cfgTimeout.value,
-      temperature: cfgTemperature.value,
-    });
-    configModal.hidden = true;
-    fillConfigForm(data.config || { ...DEEPSEEK_DEFAULTS, has_key: false });
-    await refreshSessionQuiet();
-    showToast(data.configured ? "API 配置已保存" : "API Key 已清除；阅读仍可正常使用");
-  } catch (e) {
-    showToast(e.message, 5000);
-  } finally {
-    btnConfigSave.disabled = false;
-  }
+if (btnWorkspace) {
+  btnWorkspace.addEventListener("click", () => {
+    window.location.href = "/user";
+  });
+}
+btnLlmStatus.addEventListener("click", () => toggleModelMenu());
+if (modelMenu) {
+  modelMenu.addEventListener("click", async (event) => {
+    const option = event.target.closest(".model-option");
+    if (!option) return;
+    try {
+      const data = await postJson("/api/active-model", {
+        provider_id: option.dataset.providerId,
+        model: option.dataset.model,
+      });
+      modelState = { ...data.state, llm_configured: data.llm_configured };
+      if (session) session.llm_configured = !!data.llm_configured;
+      renderModelMenu();
+      toggleModelMenu(false);
+      await updateLlmStatus();
+      showToast(`已切换到 ${option.dataset.model}`);
+    } catch (e) {
+      showToast(e.message, 5000);
+    }
+  });
+}
+document.addEventListener("mousedown", (event) => {
+  if (!modelMenu || modelMenu.hidden) return;
+  if (modelMenu.contains(event.target) || btnLlmStatus.contains(event.target)) return;
+  toggleModelMenu(false);
 });
 
 btnReset.addEventListener("click", async () => {

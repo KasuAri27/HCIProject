@@ -24,9 +24,13 @@
     </button>
     <button type="button" id="btn-focus" class="icon-btn" title="专注阅读（Ctrl+Shift+F）" aria-label="专注阅读">专注</button>
     <button type="button" id="btn-help" class="icon-btn" title="快捷键" aria-label="快捷键">?</button>
-    <button type="button" id="llm-status" class="pill pill-warn" title="配置 AI 接口">AI 未配置</button>
+    <div class="model-switch">
+      <button type="button" id="llm-status" class="pill pill-warn" title="切换首页使用的模型" aria-haspopup="menu" aria-expanded="false">模型未配置</button>
+      <div class="model-menu" id="model-menu" role="menu" hidden></div>
+    </div>
     <button type="button" id="btn-refresh-library" class="btn" title="重新扫描 library/ 目录">刷新资料</button>
-    <button type="button" id="btn-config" class="btn" title="配置 AI 接口">API 设置</button>
+    <button type="button" id="btn-workspace" class="btn btn-quiet" title="用户与设置">用户</button>
+    <button type="button" id="btn-config" class="btn" title="管理模型服务">API 配置</button>
     <button type="button" id="btn-reset" class="btn btn-quiet" title="清空学习记录，保留资料与 API 配置">重置</button>
   </header>
 
@@ -291,39 +295,7 @@
   </div>
 
   <!-- API 设置 -->
-  <div class="modal-mask" id="config-modal" hidden>
-    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="config-title">
-      <h3 id="config-title">API 设置</h3>
-      <p class="modal-lead">填 OpenAI 兼容接口。不填也能读资料、写笔记；填了才有对话、出题、批改和笔记建议。</p>
-      <label class="field" for="cfg-api-base">接口地址
-        <input id="cfg-api-base" type="text" placeholder="https://api.deepseek.com" spellcheck="false">
-      </label>
-      <label class="field" for="cfg-api-key">API Key
-        <input id="cfg-api-key" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false">
-        <span class="field-hint" id="cfg-key-hint">密钥只存在本机，页面不会回显完整内容</span>
-      </label>
-      <label class="field-check" id="cfg-clear-wrap" hidden>
-        <input type="checkbox" id="cfg-clear-key"> 清除已保存的 API Key
-      </label>
-      <label class="field" for="cfg-model">模型
-        <input id="cfg-model" type="text" placeholder="deepseek-v4-flash" spellcheck="false">
-      </label>
-      <div class="field-row">
-        <label class="field" for="cfg-timeout">超时（秒）
-          <input id="cfg-timeout" type="number" value="180" min="1">
-        </label>
-        <label class="field" for="cfg-temperature">温度（0～2）
-          <input id="cfg-temperature" type="number" value="0.7" step="0.1" min="0" max="2">
-        </label>
-      </div>
-      <div class="modal-actions">
-        <button type="button" id="btn-config-default" class="btn btn-quiet">恢复默认</button>
-        <span class="grow"></span>
-        <button type="button" id="btn-config-cancel" class="btn btn-quiet">取消</button>
-        <button type="button" id="btn-config-save" class="btn btn-primary">保存</button>
-      </div>
-    </div>
-  </div>
+
 
   <!-- 前置自评 -->
   <div class="modal-mask" id="prereq-modal" hidden>
