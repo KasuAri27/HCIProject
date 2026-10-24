@@ -33,6 +33,7 @@ IMPORT_FORMATS = {
     ".markdown": "md",
     ".txt": "txt",
     ".docx": "docx",
+    ".pptx": "pptx",
     ".pdf": "pdf",
 }
 
@@ -134,7 +135,7 @@ def list_documents() -> list[dict]:
 
 
 def iter_library_files() -> list[Path]:
-    """列出资料库中所有可导入文件（Markdown/TXT/DOCX/PDF）。"""
+    """列出资料库中所有可导入文件（Markdown/TXT/DOCX/PPTX/PDF）。"""
     if not LIBRARY_DIR.is_dir():
         return []
     base = LIBRARY_DIR.resolve()
@@ -269,6 +270,8 @@ def library_asset_url(src: str, asset_dir: str = "") -> str:
     """
     raw = (src or "").strip()
     if not raw or raw.startswith(("#", "http://", "https://", "//", "data:")):
+        return raw
+    if raw.startswith("/api/documents/"):
         return raw
     path = unquote(raw).replace("\\", "/")
     if path.startswith("/"):

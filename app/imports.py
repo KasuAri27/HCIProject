@@ -18,6 +18,7 @@ ALLOWED_FORMATS = {
     ".markdown": "md",
     ".txt": "txt",
     ".docx": "docx",
+    ".pptx": "pptx",
     ".pdf": "pdf",
 }
 
@@ -78,7 +79,7 @@ def import_upload(file_storage) -> dict:
     original_name = _now_name(getattr(file_storage, "filename", "") or "upload")
     fmt = format_for_name(original_name)
     if fmt is None:
-        raise ValueError("只支持 Markdown、TXT、DOCX 和文本型 PDF")
+        raise ValueError("只支持 Markdown、TXT、DOCX、PPTX 和 PDF")
 
     data = file_storage.read()
     if not data:
@@ -332,10 +333,13 @@ def process_job(job_id: str) -> None:
         if not path.is_file():
             raise parsers.ParseError("原文件不存在")
         store.update_job(job_id, progress=25, stage="解析内容")
+        doc_id = job.get("document_id") or ""
         parsed = parsers.parse_document(
             path,
             job.get("source_format") or path.suffix.lstrip("."),
             title_for_name(job.get("source_name") or path.name),
+            asset_dir=(config.ORIGINALS_DIR / doc_id / "assets") if doc_id else None,
+            asset_url_prefix=f"/api/documents/{doc_id}/assets/" if doc_id else "",
         )
         store.update_job(job_id, progress=68, stage="建立章节与内容块")
         store.save_parsed(version_id, parsed)

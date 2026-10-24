@@ -9,6 +9,7 @@
 - LLM_MODEL          模型名称（默认：deepseek-v4-flash）
 - LLM_TIMEOUT        HTTP 请求超时秒数（默认：180）
 - LLM_TEMPERATURE    采样温度（默认：0.7）
+- LEARN_OCR_LANG     OCR 语言（默认：chi_sim+eng）
 """
 
 import os
@@ -57,3 +58,6 @@ LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 LLM_MODEL = os.environ.get("LLM_MODEL", "deepseek-v4-flash")
 LLM_TIMEOUT = float(os.environ.get("LLM_TIMEOUT", "180"))
 LLM_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "0.7"))
+
+# 扫描 PDF 的 OCR 语言；需要系统安装 Tesseract 与对应语言包
+OCR_LANG = os.environ.get("LEARN_OCR_LANG", "chi_sim+eng")

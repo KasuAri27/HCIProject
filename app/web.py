@@ -7,7 +7,7 @@
 import threading
 from pathlib import Path
 
-from flask import Flask, abort, jsonify, render_template, request, send_file
+from flask import Flask, abort, jsonify, render_template, request, send_file, send_from_directory
 
 from . import (
     api_config,
@@ -21,6 +21,7 @@ from . import (
     prereq,
     progress,
     render,
+    search,
     source,
     store,
     tutor,
@@ -255,10 +256,12 @@ def api_document(doc_id: str):
         return jsonify({"error": "资料不存在"}), 404
     brief = _brief(doc)
     version_id = doc.get("current_version_id")
+    versions = store.list_versions(doc_id)
     if not version_id:
         return jsonify(
             {
                 "document": brief,
+                "versions": versions,
                 "status": "queued",
                 "html": "",
                 "blocks": [],
@@ -279,6 +282,7 @@ def api_document(doc_id: str):
                     "number": (version or {}).get("version_no"),
                     "source_format": (version or {}).get("source_format"),
                 },
+                "versions": versions,
                 "status": (version or {}).get("status") or "queued",
                 "error": (version or {}).get("error") or "",
                 "job": job,
@@ -301,6 +305,7 @@ def api_document(doc_id: str):
         {
             "document": brief,
             "version": rendered["version"],
+            "versions": versions,
             "status": "ready",
             "html": rendered["html"],
             "blocks": rendered["blocks"],
@@ -356,9 +361,19 @@ def api_document_original(doc_id: str):
     suffix = path.suffix.lower()
     return send_file(
         path,
-        as_attachment=suffix == ".docx",
+        as_attachment=suffix in (".docx", ".pptx"),
         download_name=doc.get("source_name") or path.name,
     )
+
+
+@app.route("/api/documents/<doc_id>/assets/<path:name>")
+def api_document_asset(doc_id: str, name: str):
+    if store.get_document(doc_id) is None:
+        return jsonify({"error": "资料不存在"}), 404
+    folder = config.ORIGINALS_DIR / doc_id / "assets"
+    if not folder.is_dir():
+        return jsonify({"error": "图片不存在"}), 404
+    return send_from_directory(str(folder), name)
 
 
 @app.route("/api/documents/<doc_id>/position", methods=["GET", "POST"])
@@ -556,6 +571,41 @@ def _ready_doc(doc_id: str):
     if (doc.get("version_status") or "") != "ready":
         return None, (jsonify({"error": "资料尚未解析完成"}), 400)
     return doc, None
+
+
+@app.route("/api/search")
+def api_search():
+    query = (request.args.get("q") or "").strip()
+    doc_id = (request.args.get("doc_id") or "").strip()
+    try:
+        limit = int(request.args.get("limit") or 20)
+    except ValueError:
+        return jsonify({"error": "limit 必须是数字"}), 400
+    if doc_id and store.get_document(doc_id) is None:
+        return jsonify({"error": "资料不存在"}), 404
+    if not query:
+        return jsonify({"query": "", "keywords": [], "count": 0, "results": []})
+    return jsonify(search.search(query, limit=limit, doc_id=doc_id))
+
+
+@app.route("/api/ask", methods=["POST"])
+def api_ask():
+    data = request.get_json(silent=True) or {}
+    query = (data.get("query") or "").strip()
+    doc_id = (data.get("doc_id") or "").strip()
+    if not query:
+        return jsonify({"error": "请输入问题"}), 400
+    if doc_id and store.get_document(doc_id) is None:
+        return jsonify({"error": "资料不存在"}), 404
+    try:
+        limit = int(data.get("limit") or 10)
+    except (TypeError, ValueError):
+        limit = 10
+    try:
+        result = search.ask(query, doc_id=doc_id, limit=limit)
+    except llm.LLMError as exc:
+        return _llm_error(exc)
+    return jsonify(result)
 
 
 @app.route("/api/selection/action", methods=["POST"])

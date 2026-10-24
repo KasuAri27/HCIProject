@@ -423,6 +423,8 @@ def create_version(
             "current_version_id = COALESCE(current_version_id, ?) WHERE id = ?",
             (source_format, now, version_id, doc_id),
         )
+        if version_no > 1:
+            conn.execute("DELETE FROM prereq_cache WHERE document_id = ?", (doc_id,))
     return version_id
 
 
@@ -442,6 +444,17 @@ def latest_version(doc_id: str) -> Optional[dict]:
             (doc_id,),
         ).fetchone()
     return _dict(row)
+
+
+def list_versions(doc_id: str) -> list[dict]:
+    """按版本号倒序列出资料版本（旧版本保留用于核对引用）。"""
+    with _conn() as conn:
+        rows = conn.execute(
+            "SELECT id, version_no, status, source_format, created_at, parsed_at, error "
+            "FROM document_versions WHERE document_id = ? ORDER BY version_no DESC",
+            (doc_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
 
 
 def set_version_status(version_id: str, status: str, error: Optional[str] = None) -> None:

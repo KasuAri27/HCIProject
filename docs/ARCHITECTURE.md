@@ -1,8 +1,8 @@
 # 架构文档：本地资料学习工作台
 
-> **状态说明（2026-10-23）**：本文档最初是第一阶段基线。第二、三阶段已在代码中落地：资料导入与统一文档结构、SQLite 学习数据、后台解析、标注与阅读位置，以及统一 AI 上下文与引用校验、划段解释/举例/补前置/理解检查、理解自评与练习证据、笔记撤销/导出、阅读设置与快捷键。当前运行方式、数据目录和限制以 [README.md](../README.md) 与 [TODO.md](TODO.md) 为准；下文明确标注“第一阶段”的描述属于历史基线。
+> **状态说明（2026-10-23）**：本文档最初是第一阶段基线。第二至四阶段已在代码中落地：资料导入与统一文档结构、SQLite 学习数据、后台解析、标注与阅读位置；统一 AI 上下文与引用校验、划段解释/举例/补前置/理解检查、理解自评与练习证据、笔记撤销/导出、阅读设置与快捷键；以及 PPTX/扫描 PDF OCR、跨文档检索与带引用问答、版本失效处理。当前运行方式、数据目录和限制以 [README.md](../README.md) 与 [TODO.md](TODO.md) 为准；下文明确标注“第一阶段”的描述属于历史基线。
 
-> 版本：2026-10-23（第三阶段）  
+> 版本：2026-10-23（第四阶段）  
 > 范围：`D:\HCIProject` 当前代码  
 > 关联：[README.md](../README.md)、[TODO.md](TODO.md)
 
@@ -98,8 +98,13 @@ AIInfraGuide、GitHub Pages 插图回源、SQLite 课程库均不再是运行依
 | 文件 | 职责 | 关键点 |
 |---|---|---|
 | `app/config.py` | 可写根目录、`LIBRARY_DIR`、LLM 环境变量 | 冻结运行时 `APP_DIR` 为 exe 目录；资料库默认在 `APP_DIR/library` |
-| `app/source.py` | 资料扫描、路径校验、读取、Markdown → HTML、资料图片 URL | 只允许 `library/` 内的 `.md/.markdown/.txt`；渲染时转义 HTML 与公式 |
+| `app/parsers.py` | Markdown / TXT / DOCX / PPTX / PDF → 统一文档结构 | PPTX 提取文字/表格/图片/备注；扫描 PDF 页内图像 OCR；错误可定位到页/幻灯片 |
+| `app/render.py` | 内容块 → 带 block id 的 HTML | 每块输出 `.doc-block`，支持图片块 |
+| `app/imports.py` | 上传、资料库扫描、后台解析任务 | 支持五种格式；图片资源写入 `db/originals/<doc_id>/assets/` |
+| `app/migrate.py` | 第一阶段 JSON → SQLite 迁移与备份 | 幂等；备份到 `db/backups/` |
+| `app/source.py` | 资料库文件与 Markdown 渲染工具 | 相对图片路径改写；保留 `/api/documents/` 资源 URL |
 | `app/ai_context.py` | 统一 AI 上下文构建与引用校验 | 每块带 `[B:<block_id>]` 与来源位置；只保留白名单内 `[cite:<id>]` |
+| `app/search.py` | 跨文档检索与带引用问答 | 只查当前版本；多文档上下文；引用附文档 ID/标题/位置 |
 | `app/tutor.py` | 划段解释/举例/补前置/理解检查与批改 | 四种任务共用同一上下文；批改输出结论行 |
 | `app/llm.py` | OpenAI 兼容 HTTP 客户端、JSON 解析 | 标准库 `urllib`；`LLMError` 统一异常 |
 | `app/api_config.py` | API 配置存储与掩码 | 配置优先级；GET 不返回完整 Key；温度 0 可保存 |
@@ -108,9 +113,9 @@ AIInfraGuide、GitHub Pages 插图回源、SQLite 课程库均不再是运行依
 | `app/notes.py` | 按资料笔记、AI 建议/草稿 | 建议/草稿不自动保存；用户确认后写笔记 |
 | `app/prereq.py` | 可选前置自评生成与缓存 | 0～5 题；不影响打开资料；可跳过 |
 | `app/explainer.py` | 出题与批改 | 使用统一上下文、出题历史、对话尾部、上次批改 |
-| `app/web.py` | 页面路由与 37 个 JSON/资源路由 | 会话聚合、资料库、标注、AI 动作、学习记录、配置、重置 |
-| `app/cli.py` | `library` / `serve` 命令 | `library` 查看资料库状态 |
-| `app/templates/index.html` | 单页结构 | 四个横向面板 + 配置/前置题/确认浮层 |
+| `app/web.py` | 页面路由与 39 个 JSON/资源路由 | 会话聚合、资料库、检索/问答、标注、AI 动作、学习记录、配置、重置 |
+| `app/cli.py` | `library` / `scan` / `migrate` / `serve` 命令 | `library` 查看资料库状态 |
+| `app/templates/index.html` | 单页结构 | 左资料柜 + 正文 + 右批注标签页；检索/版本提示/配置浮层 |
 | `app/static/app.js` | 前端状态、API、资料导航、Markdown 渲染 | 无构建步骤；AI 未配置时禁用 AI 按钮但不阻塞阅读 |
 | `app/static/style.css` | 初音未来青蓝主题 | 含本地资料卡片、空库引导、AI 状态样式 |
 
@@ -379,6 +384,7 @@ db/api_config.json  >  LLM_* 环境变量  >  默认值
 | 划段解释/举例/补前置 | 统一上下文 + 选区 + 任务说明 | Markdown + `[cite]` | 引用白名单 |
 | 划段理解检查 | 统一上下文 + 选区 | 1 道题（无答案） | 引用白名单 |
 | 理解检查批改 | 统一上下文 + 题 + 回答 | 结论行 + 反馈 + `[cite]` | 引用白名单；结论解析 |
+| 跨资料问答 | 检索当前版本多文档内容块 + 问题 | Markdown + `[cite]` + 来源列表 | 引用白名单；每份文档最多 3 块 |
 | 出题 | 统一上下文 + 已出题摘要 + 最近对话 + 上次批改 + 难度 | Markdown + `[cite]` | 引用白名单 |
 | 批改 | 统一上下文 + 题目 + 解答 | Markdown + `[cite]` | 引用白名单 |
 | 笔记建议 | 统一上下文 + 笔记 + 对话摘要 + 批改摘要 | JSON `suggestions[]` | 0～5 条、字段规范化 |
@@ -589,7 +595,7 @@ node --check app/static/app.js
 
 ---
 
-## 13. 第三阶段落地与后续方向
+## 13. 第三、四阶段落地与后续方向
 
 第三阶段在第二阶段基础上补齐学习闭环：
 
@@ -598,10 +604,17 @@ node --check app/static/app.js
 3. **理解检查**：提交回答后由 AI 批改并保存结论、反馈与自评，写入 `understanding_checks`；
 4. **练习证据**：出题历史之外，每次提交保存题目、解答、批改与自评，写入 `exercise_evidence`；
 5. **笔记**：建议/草稿/引用写入前压入撤销栈，支持一步撤销与 Markdown 导出；
-6. **阅读体验**：字号/行距持久化、专注模式、快捷键帮助、位置保存状态、窄窗口抽屉布局；
-7. **回归测试**：`tests/test_phase3.py` 覆盖上下文/引用、四种动作、理解检查、练习证据、读后自评、记录隔离与前端 DOM 契约。
+6. **阅读体验**：字号/行距持久化、专注模式、快捷键帮助、位置保存状态、窄窗口抽屉布局。
 
-第四阶段方向见 [TODO.md](TODO.md)：PPTX、扫描 PDF/OCR、图表与公式、跨文档检索、资料更新后的引用与缓存失效，以及真实中文课件验证。
+第四阶段补齐复杂资料与跨文档能力：
+
+1. **PPTX**：解析幻灯片文字、列表、表格、图片和备注；图片资源走 `/api/documents/<id>/assets/`；图表数据与嵌入公式只给提示；
+2. **扫描 PDF**：页内图像 OCR；缺少 Tesseract/语言包时在页面与错误信息中明确说明，不静默失败；
+3. **跨文档检索**：`search.py` 扫描每份资料当前版本的内容块，返回带文档/位置/片段的命中；
+4. **跨资料问答**：检索 top 块后构建多文档上下文，引用带 `doc_id/title/locator`，前端可跨文档跳转；
+5. **版本失效**：新版本清理前置题缓存；旧版本、旧标注与学习记录保留并在 UI 标记，失效引用点击时明确提示。
+
+后续方向见 [TODO.md](TODO.md)：图片/图表/公式的多模态讲解、真实中文课件与双栏论文验证。
 
 ---
 
@@ -624,6 +637,7 @@ app/
 ├── prereq.py
 ├── progress.py
 ├── render.py
+├── search.py
 ├── source.py
 ├── store.py
 ├── tutor.py
@@ -640,6 +654,7 @@ scripts/
 tests/
 ├── test_phase2.py
 ├── test_phase3.py
+├── test_phase4.py
 └── test_commit_standard.py
 docs/{ARCHITECTURE.md,CONTRIBUTING.md,TODO.md,legacy/}
 .github/workflows/ci.yml
@@ -656,5 +671,7 @@ docs/{ARCHITECTURE.md,CONTRIBUTING.md,TODO.md,legacy/}
 - 修改 AI prompt/上下文时，同步更新第 7 节、`ai_context.py` 与 `app/__init__.py` 的模块说明；
 - 任何 AI 功能都必须保持“未配置 API 不阻塞阅读”的约束；
 - 引用格式 `[cite:<block_id>]` 只允许由 `clean_citations()` 放行，不要在前端自行信任；
+- 新增解析格式时，同时更新 `imports.ALLOWED_FORMATS`、`source.IMPORT_FORMATS`、前端 accept 与测试；
+- OCR 依赖系统 Tesseract，不要把引擎路径硬编码进代码；缺引擎必须给出可操作提示；
 - 新增学习记录表时，同步更新 `store.reset_learning()` 与统计口径；
 - 打包重新启用前，先补 WebUI E2E 与 PyInstaller 冒烟。
