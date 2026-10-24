@@ -11,6 +11,25 @@
 - **AI 助教**（可选）：划段解释/举例/补前置/理解检查、跨资料检索与带来源引用的问答；不配置 API 也能阅读和记笔记。
 - **复杂资料**：PPTX 文字/表格/图片/备注提取；扫描 PDF OCR；旧版本和旧引用保留并提示。
 
+## 当前开发分支
+
+项目不再按“阶段分支”推进。页面和功能开发集中在两个长期功能分支：
+
+- `feat/home-page`：主阅读页，负责资料柜、导入、文档头、阅读区和 PDF 播放。
+- `feat/settings-modal`：设置弹窗，负责设置、用户、API 配置三块内容；从 `feat/home-page` 拉出。
+
+设置、用户、API 配置不再各自做独立页面，而是合并为首页的设置弹窗。`/settings`、`/user`、`/api-config` 只作为打开弹窗对应面板的入口。
+
+后续新增设计或功能时，先判断属于主阅读页还是设置弹窗，提交到对应分支。不要新建阶段分支，也不要把主页面改动和弹窗改动混在同一个功能提交里。
+
+## 协作约定
+
+- 功能分支按 `feat/<scope>-<short-desc>` 命名；代码和文档分开提交。
+- 文档改动单独建 `docs/*` 分支，按 [.github/pull_request_template.md](.github/pull_request_template.md) 创建 PR，合并后删除来源分支。
+- 未获明确要求不要创建 PR；`main` 已开启分支保护，合并需要 PR 和 `checks`、`commit-messages` 两个检查。
+- AI 工具开始工作前先读本 README、[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) 和 [docs/TODO.md](docs/TODO.md)，并确认当前所在分支。
+- 更完整的功能现状以 `feat/settings-modal` 分支为准。
+
 ## 快速开始
 
 ```bash
