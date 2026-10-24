@@ -3147,6 +3147,14 @@ function bindBlockClicks() {
 bindGutter(gutterLeft, railLeft, "left", "learning.railL", 220, 460);
 bindGutter(gutterRight, railRight, "right", "learning.railR", 300, 560);
 window.addEventListener("resize", moveTabInk);
+window.addEventListener("storage", (event) => {
+  if (
+    event.key === "learning.readFontSize" ||
+    event.key === "learning.readLineHeight"
+  ) {
+    loadReadingSettings();
+  }
+});
 document.addEventListener("DOMContentLoaded", () => {});
 switchTab("chat");
 moveTabInk();
