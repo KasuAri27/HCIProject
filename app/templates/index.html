@@ -17,15 +17,9 @@
     <span class="brand">学习助手</span>
     <span class="crumb" id="topbar-crumb" hidden></span>
     <span class="grow"></span>
-    <button type="button" id="btn-import" class="btn btn-primary" title="导入 Markdown、TXT、DOCX、PPTX 或 PDF">导入资料</button>
-    <input id="import-input" type="file" accept=".md,.markdown,.txt,.docx,.pptx,.pdf" multiple hidden>
     <button type="button" id="btn-annot-toggle" class="icon-btn annot-toggle" title="显示或隐藏批注栏" aria-label="批注栏">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>批注
     </button>
-    <div class="model-switch">
-      <button type="button" id="llm-status" class="pill pill-warn" title="切换首页使用的模型" aria-haspopup="menu" aria-expanded="false">模型未配置</button>
-      <div class="model-menu" id="model-menu" role="menu" hidden></div>
-    </div>
     <a id="btn-settings" class="btn" href="/settings" title="工作台设置">设置</a>
     <a id="btn-avatar" class="topbar-avatar" href="/user" title="个人主页" aria-label="个人主页">
       <img id="topbar-avatar-img" alt="" hidden>
@@ -41,6 +35,7 @@
     <aside class="rail rail-left" id="rail-left" aria-label="资料柜">
       <div class="rail-head">
         <h2 class="rail-title">资料柜<span class="badge" id="library-count">0</span></h2>
+        <input id="import-input" type="file" accept=".md,.markdown,.txt,.docx,.pptx,.pdf" multiple hidden>
       </div>
       <div class="rail-search">
         <input id="library-search" type="search" placeholder="搜索资料名或正文" autocomplete="off" spellcheck="false" aria-label="搜索资料名或正文">
@@ -73,40 +68,14 @@
       <div class="doc-head" id="doc-head" hidden>
         <div class="doc-head-main">
           <h1 class="doc-title" id="doc-title"></h1>
-          <p class="doc-call" id="doc-call" title="资料在 library/ 中的位置"></p>
         </div>
         <div class="doc-head-side">
-          <span class="save-hint" id="position-status"></span>
-          <span class="version-chip" id="doc-version" hidden></span>
-          <a id="doc-original" class="btn btn-small" download hidden title="下载保留的原始文件，不在页面里展示源码">下载原文件</a>
-          <select id="read-level" class="read-level" title="阅读后的理解自评">
-            <option value="">读后自评</option>
-            <option value="理解">理解</option>
-            <option value="模糊">模糊</option>
-            <option value="不会">不会</option>
-          </select>
-          <button type="button" id="btn-read-settings" class="btn btn-small" title="字号与行距">Aa</button>
           <button type="button" id="btn-prereq" class="btn btn-small" disabled
             title="可选：让 AI 根据这份资料出几道阅读前的基础自评">前置自评</button>
         </div>
         <div class="doc-progress" aria-hidden="true"><i id="doc-progress-bar"></i></div>
       </div>
       <div class="version-note" id="doc-version-note" hidden></div>
-
-      <div class="read-settings" id="read-settings" hidden>
-        <label>字号
-          <button type="button" id="btn-font-dec" class="btn btn-small">A−</button>
-          <span id="font-size-label">17px</span>
-          <button type="button" id="btn-font-inc" class="btn btn-small">A+</button>
-        </label>
-        <label>行距
-          <select id="line-height">
-            <option value="1.6">紧凑</option>
-            <option value="1.85">舒适</option>
-            <option value="2.1">宽松</option>
-          </select>
-        </label>
-      </div>
 
       <div class="doc-scroll" id="doc-scroll">
         <div class="doc-empty" id="doc-empty"></div>

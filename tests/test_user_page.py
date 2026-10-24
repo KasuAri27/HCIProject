@@ -77,8 +77,17 @@ class HomeHeaderTests(BaseTest):
             "btn-config",
             "btn-workspace",
             "btn-reset",
+            "btn-import",
+            "llm-status",
+            "model-menu",
+            "doc-call",
+            "doc-original",
+            "read-level",
+            "btn-read-settings",
         ):
             self.assertNotIn(f'id="{old}"', html)
+        self.assertIn('id="import-input"', html)
+        self.assertIn('id="btn-prereq"', html)
 
 
 class UserPageTests(BaseTest):

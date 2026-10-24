@@ -387,9 +387,9 @@ class FrontendContractTests(unittest.TestCase):
         refs = set(re.findall(r'\$\("([^"]+)"\)', js))
         dynamic = {"btn-empty-import", "btn-empty-scan", "btn-status-retry"}
         self.assertEqual(refs - ids - dynamic, set())
-        self.assertIn('id="doc-original"', html)
-        self.assertIn("下载原文件", html)
-        self.assertIn("download", html)
+        self.assertIn('id="btn-prereq"', html)
+        self.assertNotIn('id="doc-call"', html)
+        self.assertNotIn("下载原文件", html)
 
 
 if __name__ == "__main__":

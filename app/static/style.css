@@ -141,6 +141,7 @@ figure {
   font-size: 13px;
   font-weight: 500;
   color: var(--ink-2);
+  text-decoration: none;
   background: var(--page);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
@@ -2219,4 +2220,84 @@ body.focus-mode .workbench {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* ---------- 资料柜导入入口 ---------- */
+.library-import-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  margin-bottom: 4px;
+  font-size: 12.5px;
+  color: var(--accent);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule-soft);
+  cursor: pointer;
+}
+.library-import-row:hover {
+  background: var(--panel);
+}
+.library-import-row .import-plus {
+  font-size: 16px;
+  line-height: 1;
+}
+.library-drop-hint {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.library-drop-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  margin: 18px 12px;
+  padding: 52px 18px;
+  color: var(--ink-3);
+  text-align: center;
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+.library-drop-empty:hover,
+.library-drop-empty:focus-visible {
+  color: var(--accent);
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  outline: none;
+}
+.library-drop-empty svg {
+  width: 42px;
+  height: 42px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.library-drop-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.library-drop-empty:hover .library-drop-title {
+  color: var(--accent);
+}
+.rail-left.is-dragover {
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.rail-body.is-empty {
+  display: flex;
+  align-items: center;
+}
+.rail-body.is-empty .library-drop-empty {
+  flex: 1;
+  min-height: 240px;
 }

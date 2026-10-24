@@ -74,7 +74,7 @@ def library_status() -> dict:
 
     documents = iter_library_files() if is_dir else []
     if is_dir and not documents:
-        warnings.append("资料库为空：把资料放入该目录，或使用页面上的导入按钮。")
+        warnings.append("资料库为空：把文件拖进资料柜，或点资料柜里的「导入资料」。")
 
     return {
         "path": str(LIBRARY_DIR),

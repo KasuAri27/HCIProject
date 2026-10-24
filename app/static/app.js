@@ -40,7 +40,6 @@ let jobsTimer = null;
 let jobsPolling = false;
 let positionTimer = null;
 let suppressPositionSave = true;
-
 let notesUndoStack = [];
 let notesUndoTimer = null;
 let notesLastValue = "";
@@ -48,7 +47,6 @@ let checkQuestion = "";
 let checkSelection = null;
 let checkId = "";
 let lastExerciseEvidenceId = "";
-let positionStatusTimer = null;
 let readFontSize = 17;
 let readLineHeight = 1.85;
 
@@ -70,13 +68,10 @@ const btnAnnotToggle = $("btn-annot-toggle");
 const btnHelpClose = $("btn-help-close");
 const helpModal = $("help-modal");
 const topbarCrumb = $("topbar-crumb");
-const btnImport = $("btn-import");
 const importInput = $("import-input");
-const btnLlmStatus = $("llm-status");
 const btnAvatar = $("btn-avatar");
 const topbarAvatarImg = $("topbar-avatar-img");
 const topbarAvatarInitial = $("topbar-avatar-initial");
-const modelMenu = $("model-menu");
 const jobStrip = $("job-strip");
 
 const railLeft = $("rail-left");
@@ -98,18 +93,7 @@ const gutterRight = $("gutter-right");
 
 const docHead = $("doc-head");
 const docTitle = $("doc-title");
-const docCall = $("doc-call");
-const docVersion = $("doc-version");
 const docVersionNote = $("doc-version-note");
-const docOriginal = $("doc-original");
-const positionStatusEl = $("position-status");
-const readLevelSelect = $("read-level");
-const btnReadSettings = $("btn-read-settings");
-const readSettings = $("read-settings");
-const btnFontDec = $("btn-font-dec");
-const btnFontInc = $("btn-font-inc");
-const fontSizeLabel = $("font-size-label");
-const lineHeightSelect = $("line-height");
 const btnPrereq = $("btn-prereq");
 const docProgressBar = $("doc-progress-bar");
 const docScroll = $("doc-scroll");
@@ -414,16 +398,41 @@ function renderLibrary() {
     return `${doc.title || ""} ${doc.source_name || ""}`.toLowerCase().includes(query);
   });
 
-  libraryAlert.hidden = !(libraryState.library && libraryState.library.warnings && libraryState.library.warnings.length);
-  libraryAlert.textContent =
-    libraryState.library && libraryState.library.warnings
-      ? libraryState.library.warnings.join(" ")
-      : "";
+  const warnings = ((libraryState.library && libraryState.library.warnings) || []).filter(
+    (warning) => !(documents.length === 0 && warning.includes("资料库为空"))
+  );
+  libraryAlert.hidden = !warnings.length;
+  libraryAlert.textContent = warnings.join(" ");
+
+  libraryTree.classList.toggle("is-empty", !documents.length);
+  if (!documents.length) {
+    libraryTree.innerHTML = `
+      <div class="library-drop-empty" id="library-drop-empty" role="button" tabindex="0" aria-label="导入资料">
+        <svg viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M12 6h16l8 8v28H12z"></path>
+          <path d="M28 6v8h8"></path>
+          <path d="M24 22v12M18 28h12"></path>
+        </svg>
+        <span class="library-drop-title">导入资料</span>
+        <span class="library-drop-hint">点这里选文件，或直接拖进来</span>
+      </div>`;
+    return;
+  }
+
+  libraryTree.innerHTML = "";
+  const importRow = document.createElement("button");
+  importRow.type = "button";
+  importRow.id = "library-import-row";
+  importRow.className = "library-import-row";
+  importRow.innerHTML =
+    '<span class="import-plus" aria-hidden="true">+</span><span>导入资料</span><span class="library-drop-hint">拖放也可以</span>';
+  libraryTree.appendChild(importRow);
 
   if (!filtered.length) {
-    libraryTree.innerHTML = `<p class="empty">${
-      documents.length ? "没有匹配的资料。" : "还没有资料。点右上角的「导入资料」。"
-    }</p>`;
+    const empty = document.createElement("p");
+    empty.className = "empty";
+    empty.textContent = "没有匹配的资料。";
+    libraryTree.appendChild(empty);
     return;
   }
 
@@ -434,18 +443,15 @@ function renderLibrary() {
     groups.get(key).push(doc);
   }
 
-  const frag = document.createDocumentFragment();
   for (const [label, docs] of groups) {
     const heading = document.createElement("div");
     heading.className = "group-label";
     heading.textContent = label;
-    frag.appendChild(heading);
+    libraryTree.appendChild(heading);
     for (const doc of docs) {
-      frag.appendChild(buildDocRow(doc));
+      libraryTree.appendChild(buildDocRow(doc));
     }
   }
-  libraryTree.innerHTML = "";
-  libraryTree.appendChild(frag);
 }
 
 // ------------------------------------------------------------
@@ -778,12 +784,10 @@ if (btnAskCross) btnAskCross.addEventListener("click", askAcrossDocuments);
 // ------------------------------------------------------------
 // 导入
 // ------------------------------------------------------------
-btnImport.addEventListener("click", () => importInput.click());
-importInput.addEventListener("change", async () => {
-  const files = Array.from(importInput.files || []);
-  importInput.value = "";
+async function uploadFiles(fileList) {
+  const files = Array.from(fileList || []);
   if (!files.length) return;
-  btnImport.disabled = true;
+  railLeft.classList.add("is-importing");
   try {
     let imported = 0;
     for (const file of files) {
@@ -804,7 +808,55 @@ importInput.addEventListener("change", async () => {
     await fetchLibraryData();
     if ((libraryState.jobs || []).length) startJobPolling();
   } finally {
-    btnImport.disabled = false;
+    railLeft.classList.remove("is-importing");
+  }
+}
+
+importInput.addEventListener("change", () => {
+  const files = Array.from(importInput.files || []);
+  importInput.value = "";
+  uploadFiles(files);
+});
+
+libraryTree.addEventListener("click", (event) => {
+  if (event.target.closest("#library-import-row, #library-drop-empty")) {
+    importInput.click();
+  }
+});
+libraryTree.addEventListener("keydown", (event) => {
+  if (!event.target.closest("#library-drop-empty")) return;
+  if (event.key === "Enter" || event.key === " ") {
+    event.preventDefault();
+    importInput.click();
+  }
+});
+
+["dragenter", "dragover"].forEach((name) => {
+  railLeft.addEventListener(name, (event) => {
+    if (!event.dataTransfer || !event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    railLeft.classList.add("is-dragover");
+  });
+});
+railLeft.addEventListener("dragleave", (event) => {
+  if (event.relatedTarget && railLeft.contains(event.relatedTarget)) return;
+  railLeft.classList.remove("is-dragover");
+});
+railLeft.addEventListener("drop", (event) => {
+  if (!event.dataTransfer) return;
+  event.preventDefault();
+  railLeft.classList.remove("is-dragover");
+  uploadFiles(event.dataTransfer.files);
+});
+window.addEventListener("dragover", (event) => {
+  if (event.dataTransfer && event.dataTransfer.types.includes("Files")) {
+    event.preventDefault();
+  }
+});
+window.addEventListener("drop", (event) => {
+  if (event.dataTransfer && event.dataTransfer.files.length) {
+    event.preventDefault();
   }
 });
 
@@ -887,20 +939,9 @@ async function loadDocument(docId, options = {}) {
 function renderDocView(data) {
   docHead.hidden = false;
   docTitle.textContent = (data.document && data.document.title) || "未命名资料";
-  docCall.textContent =
-    (data.document && (data.document.source_path || data.document.source_name)) || "";
   topbarCrumb.hidden = false;
   topbarCrumb.textContent = (data.document && (data.document.source_name || data.document.title)) || "";
-  docVersion.hidden = !(data.version && data.version.number);
-  docVersion.textContent = data.version && data.version.number ? `v${data.version.number}` : "";
   const versions = data.versions || [];
-  if (docVersion) {
-    docVersion.title = versions.length
-      ? versions
-          .map((v) => `v${v.version_no} · ${v.status}${v.parsed_at ? ` · ${v.parsed_at}` : ""}`)
-          .join("\n")
-      : "当前版本";
-  }
   if (docVersionNote) {
     if (versions.length > 1) {
       const oldVersions = versions
@@ -916,14 +957,9 @@ function renderDocView(data) {
       docVersionNote.textContent = "";
     }
   }
-  docOriginal.hidden = !data.original_url;
-  docOriginal.href = data.original_url || "#";
   btnPrereq.disabled = data.status !== "ready";
-  readLevelSelect.disabled = data.status !== "ready";
-  readLevelSelect.value = (data.document && data.document.read_level) || "";
   currentViewMode = data.view_mode === "pdf" ? "pdf" : "markdown";
   currentPdfUrl = data.pdf_url || "";
-  setPositionStatus("", "");
 
   if (data.status !== "ready") {
     pdfView.hidden = true;
@@ -949,19 +985,15 @@ function renderDocView(data) {
     docPage.hidden = true;
     pdfView.hidden = false;
     docScroll.classList.add("is-pdf");
-    btnReadSettings.hidden = true;
-    readSettings.hidden = true;
     docBody.innerHTML = "";
     pdfFrame.src = currentPdfUrl;
     docProgressBar.style.width = "0";
-    setPositionStatus("", "PDF 播放模式 · 不记录滚动位置");
     renderAnnotations();
     return;
   }
 
   pdfView.hidden = true;
   docScroll.classList.remove("is-pdf");
-  btnReadSettings.hidden = false;
   pdfFrame.src = "about:blank";
   docEmpty.hidden = true;
   docPage.hidden = false;
@@ -985,8 +1017,6 @@ function renderDocView(data) {
 function applyReadingSettings() {
   document.documentElement.style.setProperty("--read-font-size", `${readFontSize}px`);
   document.documentElement.style.setProperty("--read-line-height", String(readLineHeight));
-  if (fontSizeLabel) fontSizeLabel.textContent = `${readFontSize}px`;
-  if (lineHeightSelect) lineHeightSelect.value = String(readLineHeight);
   try {
     localStorage.setItem("learning.readFontSize", String(readFontSize));
     localStorage.setItem("learning.readLineHeight", String(readLineHeight));
@@ -1007,18 +1037,6 @@ function loadReadingSettings() {
   applyReadingSettings();
 }
 
-async function setReadLevel(level) {
-  if (!currentDocId()) return;
-  try {
-    await postJson(`/api/documents/${currentDocId()}/read-level`, { self_level: level });
-    if (currentDoc) currentDoc.read_level = level;
-    readLevelSelect.value = level;
-    showToast(level ? `读后自评：${level}` : "已清除读后自评");
-  } catch (e) {
-    showToast(e.message, 5000);
-  }
-}
-
 function toggleFocusMode(force) {
   const on = force === undefined ? !document.body.classList.contains("focus-mode") : force;
   document.body.classList.toggle("focus-mode", on);
@@ -1033,36 +1051,6 @@ function closeHelp() {
   if (helpModal) helpModal.hidden = true;
 }
 
-function clampNumber(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-if (btnReadSettings) {
-  btnReadSettings.addEventListener("click", () => {
-    readSettings.hidden = !readSettings.hidden;
-  });
-}
-if (btnFontDec) {
-  btnFontDec.addEventListener("click", () => {
-    readFontSize = clampNumber(readFontSize - 1, 14, 24);
-    applyReadingSettings();
-  });
-}
-if (btnFontInc) {
-  btnFontInc.addEventListener("click", () => {
-    readFontSize = clampNumber(readFontSize + 1, 14, 24);
-    applyReadingSettings();
-  });
-}
-if (lineHeightSelect) {
-  lineHeightSelect.addEventListener("change", () => {
-    readLineHeight = clampNumber(parseFloat(lineHeightSelect.value) || 1.85, 1.4, 2.4);
-    applyReadingSettings();
-  });
-}
-if (readLevelSelect) {
-  readLevelSelect.addEventListener("change", () => setReadLevel(readLevelSelect.value));
-}
 if (btnHelpClose) btnHelpClose.addEventListener("click", closeHelp);
 if (helpModal) {
   helpModal.addEventListener("mousedown", (e) => {
@@ -1088,10 +1076,6 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Escape") {
-    if (modelMenu && !modelMenu.hidden) {
-      toggleModelMenu(false);
-      return;
-    }
     if (helpModal && !helpModal.hidden) {
       closeHelp();
       return;
@@ -1182,25 +1166,12 @@ function showEmpty() {
 }
 
 function renderEmptyLibrary() {
-  const path = (libraryState.library && libraryState.library.path) || "library/";
   docEmpty.innerHTML = `
     <div class="empty-card">
       <h2>把你的资料放进来</h2>
-      <p>支持 Markdown、TXT、DOCX 和文本型 PDF。导入后会保留原文件，并在后台解析成可阅读、可标注的章节和内容块。</p>
-      <div class="path-line"><span class="grow">${escapeHtml(path)}</span></div>
-      <ol class="empty-steps">
-        <li>点右上角「导入资料」，选择一个或多个文件。</li>
-        <li>等后台解析完成，左侧资料柜会出现文档。</li>
-        <li>也可以把文件直接放进上面的目录，再点「刷新资料」。</li>
-      </ol>
+      <p>支持 Markdown、TXT、DOCX、PPTX 和 PDF。从左侧资料柜点「导入资料」，或把文件直接拖进资料柜；解析完成后就能在这里阅读和标注。</p>
       <p class="empty-note">没有配置 API 也能阅读、标注和记笔记。</p>
-      <div class="actions" style="display:flex;gap:8px;margin-top:14px">
-        <button type="button" class="btn btn-primary" id="btn-empty-import">导入资料</button>
-        <button type="button" class="btn btn-quiet" id="btn-empty-scan">刷新资料库</button>
-      </div>
     </div>`;
-  $("btn-empty-import").addEventListener("click", () => importInput.click());
-  $("btn-empty-scan").addEventListener("click", refreshLibrary);
 }
 
 function renderEmptyPick() {
@@ -1220,7 +1191,7 @@ function renderEmptyPick() {
           )
           .join("")}
       </div>
-      <p class="empty-note">也可以点右上角「导入资料」继续添加。</p>
+      <p class="empty-note">也可以在左侧资料柜继续导入。</p>
     </div>`;
   docEmpty.querySelectorAll(".quick-item").forEach((btn) => {
     btn.addEventListener("click", () => loadDocument(btn.dataset.docId, { markOpen: true }));
@@ -1286,20 +1257,6 @@ function collectPosition() {
   };
 }
 
-function setPositionStatus(kind, text) {
-  if (!positionStatusEl) return;
-  positionStatusEl.textContent = text || "";
-  positionStatusEl.classList.remove("is-saving", "is-ok", "is-err");
-  if (kind) positionStatusEl.classList.add(kind);
-  clearTimeout(positionStatusTimer);
-  if (kind === "is-ok") {
-    positionStatusTimer = setTimeout(() => {
-      positionStatusEl.textContent = "";
-      positionStatusEl.classList.remove("is-ok");
-    }, 3200);
-  }
-}
-
 function schedulePositionSave() {
   if (suppressPositionSave) return;
   clearTimeout(positionTimer);
@@ -1320,16 +1277,9 @@ async function savePositionNow(beacon = false) {
       });
       return;
     }
-    setPositionStatus("is-saving", "保存位置…");
     await postJson(`/api/documents/${currentDocId()}/position`, position);
-    const stamp = new Date().toLocaleTimeString("zh-CN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-    setPositionStatus("is-ok", `位置已保存 · ${stamp}`);
   } catch (e) {
-    setPositionStatus("is-err", "位置未保存");
+    /* 位置保存失败不打扰阅读 */
   }
 }
 
@@ -2621,123 +2571,14 @@ async function loadTopbarProfile() {
   }
 }
 
-let modelState = null;
-
-function usableModels() {
-  if (!modelState) return [];
-  const withKey = new Set(
-    (modelState.providers || [])
-      .filter((provider) => provider.has_key)
-      .map((provider) => provider.id)
-  );
-  return (modelState.enabled_models || []).filter((item) =>
-    withKey.has(item.provider_id)
-  );
-}
-
-function renderModelMenu() {
-  if (!modelMenu) return;
-  const enabled = usableModels();
-  if (!enabled.length) {
-    modelMenu.innerHTML =
-      '<p class="model-menu-empty">还没有填写 Key 的服务。<a class="model-menu-link" href="/api-config">去 API 配置</a></p>';
-    return;
-  }
-  const groups = new Map();
-  for (const item of enabled) {
-    const key = item.provider_name || item.provider_id || "服务";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(item);
-  }
-  modelMenu.innerHTML = [...groups.entries()]
-    .map(
-      ([name, items]) => `<p class="model-menu-group">${escapeHtml(name)}</p>
-        ${items
-          .map(
-            (item) => `<button type="button" class="model-option${
-              item.active ? " is-active" : ""
-            }" role="menuitemradio" aria-checked="${item.active ? "true" : "false"}" data-provider-id="${escapeAttr(
-              item.provider_id
-            )}" data-model="${escapeAttr(item.model)}">
-              <span class="model-name">${escapeHtml(item.model)}</span>
-            </button>`
-          )
-          .join("")}`
-    )
-    .join("");
-}
-
-async function updateLlmStatus() {
-  let configured = llmConfigured();
-  try {
-    const data = await api("/api/models");
-    modelState = data;
-    configured = !!data.llm_configured;
-    if (session) session.llm_configured = configured;
-    const active = usableModels().find((item) => item.active);
-    if (active) {
-      btnLlmStatus.textContent = `${active.provider_name} · ${active.model}`;
-      btnLlmStatus.title = `首页模型：${active.provider_name} · ${active.model}`;
-    } else {
-      btnLlmStatus.textContent = "配置模型";
-      btnLlmStatus.title = "打开模型菜单";
-    }
-    btnLlmStatus.classList.toggle("pill-ok", configured && !!active);
-    btnLlmStatus.classList.toggle("pill-warn", !(configured && !!active));
-    if (modelMenu && !modelMenu.hidden) renderModelMenu();
-  } catch (e) {
-    btnLlmStatus.textContent = configured ? "AI 已就绪" : "配置模型";
-    btnLlmStatus.classList.toggle("pill-ok", configured);
-    btnLlmStatus.classList.toggle("pill-warn", !configured);
-  }
-  const canAI = ready() && configured;
+function updateLlmStatus() {
+  const canAI = ready() && llmConfigured();
   btnChatSend.disabled = !canAI;
   btnNotesDraft.disabled = !canAI || !notesDocId;
   btnNotesRefreshSuggest.disabled = !canAI || !notesDocId;
   btnExercise.disabled = !canAI;
   btnSubmit.disabled = !canAI || !questionCache;
 }
-
-async function toggleModelMenu(force) {
-  if (!modelMenu) return;
-  const open = force === undefined ? modelMenu.hidden : force;
-  if (!open) {
-    modelMenu.hidden = true;
-    btnLlmStatus.setAttribute("aria-expanded", "false");
-    return;
-  }
-  if (!modelState) await updateLlmStatus();
-  renderModelMenu();
-  modelMenu.hidden = false;
-  btnLlmStatus.setAttribute("aria-expanded", "true");
-}
-
-btnLlmStatus.addEventListener("click", () => toggleModelMenu());
-if (modelMenu) {
-  modelMenu.addEventListener("click", async (event) => {
-    const option = event.target.closest(".model-option");
-    if (!option) return;
-    try {
-      const data = await postJson("/api/active-model", {
-        provider_id: option.dataset.providerId,
-        model: option.dataset.model,
-      });
-      modelState = { ...data.state, llm_configured: data.llm_configured };
-      if (session) session.llm_configured = !!data.llm_configured;
-      renderModelMenu();
-      toggleModelMenu(false);
-      await updateLlmStatus();
-      showToast(`已切换到 ${option.dataset.model}`);
-    } catch (e) {
-      showToast(e.message, 5000);
-    }
-  });
-}
-document.addEventListener("mousedown", (event) => {
-  if (!modelMenu || modelMenu.hidden) return;
-  if (modelMenu.contains(event.target) || btnLlmStatus.contains(event.target)) return;
-  toggleModelMenu(false);
-});
 
 // ------------------------------------------------------------
 // 标签徽章
