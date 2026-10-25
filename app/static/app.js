@@ -34,6 +34,32 @@ let selection = null;
 let spotBubbleLoading = false;
 let activeTab = "chat";
 let railLeftPinned = false;
+let pdfShellPromise = null;
+
+function getPdfShell() {
+  if (!pdfShellPromise) pdfShellPromise = import("./pdf-viewer.js?v=6.4.299-2");
+  return pdfShellPromise;
+}
+
+async function showPdfShell(url) {
+  if (!url) return;
+  try {
+    const shell = await getPdfShell();
+    await shell.loadPdf(url);
+  } catch (error) {
+    showToast(`PDF 阅读器加载失败：${error.message || error}`, 5000);
+  }
+}
+
+async function clearPdfShell() {
+  if (!pdfShellPromise) return;
+  try {
+    const shell = await pdfShellPromise;
+    await shell.clearPdf();
+  } catch (error) {
+    /* 阅读器尚未就绪 */
+  }
+}
 let docToken = 0;
 
 let jobsTimer = null;
@@ -95,7 +121,6 @@ const docProgressBar = $("doc-progress-bar");
 const docScroll = $("doc-scroll");
 const docEmpty = $("doc-empty");
 const pdfView = $("pdf-view");
-const pdfFrame = $("pdf-frame");
 const docPage = $("doc-page");
 const docBody = $("doc-body");
 
@@ -613,10 +638,17 @@ async function focusBlock(blockId, docId = "") {
     const block = currentBlocks.find((item) => item.id === blockId);
     const locator = (block && block.locator) || {};
     const page = locator.page || locator.slide;
-    if (page && currentPdfUrl) {
-      const base = currentPdfUrl.split("#")[0];
-      pdfFrame.src = `${base}#page=${encodeURIComponent(page)}&zoom=page-width`;
-      showToast(`已定位到第 ${page} 页`);
+    if (page) {
+      try {
+        const shell = await getPdfShell();
+        if (shell.goToPage(page)) {
+          showToast(`已定位到第 ${page} 页`);
+        } else {
+          showToast("PDF 页码超出范围");
+        }
+      } catch (error) {
+        showToast("PDF 阅读器尚未就绪");
+      }
     } else {
       showToast("已打开资料；PDF 播放模式无法精确定位该段");
     }
@@ -983,6 +1015,7 @@ function renderDocView(data) {
     pdfView.hidden = true;
     docScroll.classList.remove("is-pdf");
     docPage.hidden = true;
+    clearPdfShell();
     docEmpty.hidden = false;
     renderStatusCard(data);
     docProgressBar.style.width = "0";
@@ -1002,14 +1035,14 @@ function renderDocView(data) {
     pdfView.hidden = false;
     docScroll.classList.add("is-pdf");
     docBody.innerHTML = "";
-    pdfFrame.src = currentPdfUrl;
+    showPdfShell(currentPdfUrl);
     docProgressBar.style.width = "0";
     return;
   }
 
   pdfView.hidden = true;
   docScroll.classList.remove("is-pdf");
-  pdfFrame.src = "about:blank";
+  clearPdfShell();
   docEmpty.hidden = true;
   docPage.hidden = false;
   docBody.innerHTML = data.html || "";

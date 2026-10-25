@@ -7,6 +7,7 @@
 
 import base64
 import json
+import mimetypes
 import threading
 from io import BytesIO
 from pathlib import Path
@@ -31,6 +32,7 @@ from . import (
     tutor,
 )
 
+mimetypes.add_type("text/javascript", ".mjs")
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = config.MAX_UPLOAD_MB * 1024 * 1024
 
