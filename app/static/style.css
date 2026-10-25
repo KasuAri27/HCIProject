@@ -2301,3 +2301,51 @@ body.focus-mode .workbench {
   flex: 1;
   min-height: 240px;
 }
+
+/* ---------- 可收纳侧栏 ---------- */
+.workbench {
+  grid-template-columns: 0 0 minmax(0, 1fr) var(--gutter) var(--rail-r);
+}
+.rail-left {
+  position: fixed;
+  top: var(--topbar-h);
+  bottom: 0;
+  left: 0;
+  z-index: 60;
+  width: min(320px, 86vw);
+  background: var(--panel);
+  border-right: 1px solid var(--rule);
+  box-shadow: var(--shadow-pop);
+  transform: translateX(-102%);
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+body.rail-left-open .rail-left {
+  transform: none;
+}
+#gutter-left {
+  display: none;
+}
+body.rail-right-closed .workbench {
+  grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
+}
+body.rail-right-closed .rail-right,
+body.rail-right-closed #gutter-right {
+  display: none;
+}
+.chat-toggle.is-active {
+  color: var(--accent-2);
+  background: var(--accent-wash);
+}
+.review-history {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule-soft);
+}
+.review-history .field-label {
+  margin-bottom: 8px;
+}
+@media (max-width: 900px) {
+  .workbench {
+    grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
+  }
+}

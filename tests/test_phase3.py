@@ -273,6 +273,7 @@ class FrontendPhase3Tests(unittest.TestCase):
         for element_id in (
             "btn-settings",
             "btn-avatar",
+            "btn-chat-toggle",
             "topbar-avatar-img",
             "topbar-avatar-initial",
             "help-modal",
@@ -289,8 +290,7 @@ class FrontendPhase3Tests(unittest.TestCase):
             "btn-notes-export",
             "exercise-self-rate",
             "exercise-evidence-status",
-            "understanding-count",
-            "practice-count",
+            "last-review",
         ):
             self.assertIn(f'id="{element_id}"', html, element_id)
 

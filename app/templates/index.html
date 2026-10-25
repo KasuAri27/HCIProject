@@ -17,8 +17,8 @@
     <span class="brand">学习助手</span>
     <span class="crumb" id="topbar-crumb" hidden></span>
     <span class="grow"></span>
-    <button type="button" id="btn-annot-toggle" class="icon-btn annot-toggle" title="显示或隐藏批注栏" aria-label="批注栏">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>批注
+    <button type="button" id="btn-chat-toggle" class="icon-btn chat-toggle" title="显示或隐藏右侧栏" aria-label="显示或隐藏右侧栏" aria-pressed="true">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>对话
     </button>
     <a id="btn-settings" class="btn" href="/settings" title="工作台设置">设置</a>
     <a id="btn-avatar" class="topbar-avatar" href="/user" title="个人主页" aria-label="个人主页">
@@ -50,14 +50,6 @@
       <div class="rail-alert" id="library-alert" hidden></div>
       <div class="rail-body" id="library-tree">
         <p class="empty">正在扫描资料库…</p>
-      </div>
-      <div class="rail-foot">
-        <div class="foot-row"><span>已读</span><span id="read-ratio">0 / 0</span></div>
-        <div class="foot-bar"><i id="read-bar"></i></div>
-        <div class="foot-row foot-muted"><span>笔记</span><span id="note-count">0</span></div>
-        <div class="foot-row foot-muted"><span>做过题</span><span id="exercise-count">0</span></div>
-        <div class="foot-row foot-muted"><span>理解自评</span><span id="understanding-count">0</span></div>
-        <div class="foot-row foot-muted"><span>练习记录</span><span id="practice-count">0</span></div>
       </div>
     </aside>
 
@@ -111,7 +103,6 @@
           <button type="button" id="btn-spot-ask" class="btn btn-small btn-primary">现场问</button>
           <button type="button" id="btn-throw-chat" class="btn btn-small">放进对话</button>
           <button type="button" id="btn-quote-note" class="btn btn-small btn-quiet">记进笔记</button>
-          <button type="button" id="btn-highlight" class="btn btn-small btn-quiet">高亮</button>
         </div>
         <div class="bubble-answer markdown" id="select-bubble-answer" hidden></div>
         <div class="check-box" id="check-answer-wrap" hidden>
@@ -129,23 +120,10 @@
 
       <div class="tabs" role="tablist" aria-label="批注">
         <button type="button" role="tab" id="tab-chat" class="tab is-active" data-pane="pane-chat" aria-selected="true" aria-controls="pane-chat">对话<span class="tab-badge" id="badge-chat" hidden></span></button>
-        <button type="button" role="tab" id="tab-annotations" class="tab" data-pane="pane-annotations" aria-selected="false" aria-controls="pane-annotations">标注<span class="tab-badge" id="badge-annotations" hidden></span></button>
         <button type="button" role="tab" id="tab-notes" class="tab" data-pane="pane-notes" aria-selected="false" aria-controls="pane-notes">笔记<span class="tab-dot" id="dot-notes" hidden></span></button>
         <button type="button" role="tab" id="tab-exercise" class="tab" data-pane="pane-exercise" aria-selected="false" aria-controls="pane-exercise">练习<span class="tab-dot" id="dot-exercise" hidden></span></button>
-        <button type="button" role="tab" id="tab-review" class="tab" data-pane="pane-review" aria-selected="false" aria-controls="pane-review">复盘<span class="tab-dot" id="dot-review" hidden></span></button>
         <span class="tab-ink" id="tab-ink" aria-hidden="true"></span>
       </div>
-
-      <!-- 标注 -->
-      <section class="pane" id="pane-annotations" role="tabpanel" aria-labelledby="tab-annotations" hidden>
-        <div class="pane-bar">
-          <span class="field-label" style="margin:0">高亮与批注</span>
-          <span class="annot-count" id="annot-count"></span>
-        </div>
-        <div class="pane-scroll" id="annotations-list">
-          <p class="empty">在正文里选中一段文字，点「高亮」，这里会出现标注。</p>
-        </div>
-      </section>
 
       <!-- 对话 -->
       <section class="pane is-active" id="pane-chat" role="tabpanel" aria-labelledby="tab-chat">
@@ -238,13 +216,12 @@
             <span class="hint" id="exercise-evidence-status"></span>
           </div>
           <button type="button" id="btn-exercise-next" class="btn btn-small" hidden>再来一题</button>
-        </div>
-      </section>
-
-      <!-- 复盘 -->
-      <section class="pane" id="pane-review" role="tabpanel" aria-labelledby="tab-review" hidden>
-        <div class="pane-scroll markdown" id="last-review">
-          <p class="empty">提交解答后，这里显示你的解答和 AI 批改。</p>
+          <div class="review-history">
+            <h3 class="field-label">上次批改</h3>
+            <div class="markdown" id="last-review">
+              <p class="empty">提交解答后，这里显示你的解答和 AI 批改。</p>
+            </div>
+          </div>
         </div>
       </section>
     </aside>
