@@ -87,7 +87,7 @@ class HomeHeaderTests(BaseTest):
         ):
             self.assertNotIn(f'id="{old}"', html)
         self.assertIn('id="import-input"', html)
-        self.assertIn('id="btn-prereq"', html)
+        self.assertIn('id="pdf-viewer-container"', html)
 
 
 class UserPageTests(BaseTest):

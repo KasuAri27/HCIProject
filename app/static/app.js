@@ -113,11 +113,7 @@ const btnAskCross = $("btn-ask-cross");
 const gutterLeft = $("gutter-left");
 const gutterRight = $("gutter-right");
 
-const docHead = $("doc-head");
-const docTitle = $("doc-title");
 const docVersionNote = $("doc-version-note");
-const btnPrereq = $("btn-prereq");
-const docProgressBar = $("doc-progress-bar");
 const docScroll = $("doc-scroll");
 const docEmpty = $("doc-empty");
 const pdfView = $("pdf-view");
@@ -184,12 +180,6 @@ const btnConfirmCancel = $("btn-confirm-cancel");
 const btnConfirmOk = $("btn-confirm-ok");
 let confirmResolver = null;
 
-const prereqModal = $("prereq-modal");
-const prereqFocus = $("prereq-focus");
-const prereqQuestions = $("prereq-questions");
-const prereqEmpty = $("prereq-empty");
-const btnPrereqSkip = $("btn-prereq-skip");
-const btnPrereqSubmit = $("btn-prereq-submit");
 const toastEl = $("toast");
 
 // ------------------------------------------------------------
@@ -987,8 +977,6 @@ async function loadDocument(docId, options = {}) {
 }
 
 function renderDocView(data) {
-  docHead.hidden = false;
-  docTitle.textContent = (data.document && data.document.title) || "未命名资料";
   topbarCrumb.hidden = false;
   topbarCrumb.textContent = (data.document && (data.document.source_name || data.document.title)) || "";
   const versions = data.versions || [];
@@ -1007,7 +995,6 @@ function renderDocView(data) {
       docVersionNote.textContent = "";
     }
   }
-  btnPrereq.disabled = data.status !== "ready";
   currentViewMode = data.view_mode === "pdf" ? "pdf" : "markdown";
   currentPdfUrl = data.pdf_url || "";
 
@@ -1018,7 +1005,6 @@ function renderDocView(data) {
     clearPdfShell();
     docEmpty.hidden = false;
     renderStatusCard(data);
-    docProgressBar.style.width = "0";
     renderExercise();
     return;
   }
@@ -1036,7 +1022,6 @@ function renderDocView(data) {
     docScroll.classList.add("is-pdf");
     docBody.innerHTML = "";
     showPdfShell(currentPdfUrl);
-    docProgressBar.style.width = "0";
     return;
   }
 
@@ -1053,7 +1038,6 @@ function renderDocView(data) {
 
   setTimeout(() => {
     restorePosition(data.position);
-    updateDocProgress();
     setTimeout(() => {
       suppressPositionSave = false;
     }, 450);
@@ -1170,7 +1154,6 @@ function renderStatusCard(data) {
 }
 
 function showEmpty() {
-  docHead.hidden = true;
   docPage.hidden = true;
   docEmpty.hidden = false;
   topbarCrumb.hidden = true;
@@ -1267,12 +1250,6 @@ async function refreshSessionQuiet() {
 // ------------------------------------------------------------
 // 阅读位置
 // ------------------------------------------------------------
-function updateDocProgress() {
-  const max = docScroll.scrollHeight - docScroll.clientHeight;
-  const pct = max > 0 ? (docScroll.scrollTop / max) * 100 : 0;
-  docProgressBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-}
-
 function collectPosition() {
   if (!ready() || !currentVersionId || !currentBlocks.length) return null;
   const nodes = Array.from(docBody.querySelectorAll(".doc-block[data-block-id]"));
@@ -1328,14 +1305,12 @@ async function savePositionNow(beacon = false) {
 
 function restorePosition(position) {
   if (!position || position.version_id !== currentVersionId || !position.block_id) {
-    updateDocProgress();
     return;
   }
   const block = docBody.querySelector(
     `.doc-block[data-block-id="${CSS.escape(position.block_id)}"]`
   );
   if (!block) {
-    updateDocProgress();
     return;
   }
   const containerTop = docScroll.getBoundingClientRect().top;
@@ -1344,11 +1319,9 @@ function restorePosition(position) {
   const target = top + (position.block_offset || 0) * height - 10;
   suppressPositionSave = true;
   docScroll.scrollTop = Math.max(0, target);
-  updateDocProgress();
 }
 
 docScroll.addEventListener("scroll", () => {
-  updateDocProgress();
   schedulePositionSave();
 });
 
@@ -2273,103 +2246,6 @@ if (exerciseSelfRate) {
     if (btn) rateExercise(btn.dataset.level);
   });
 }
-
-// ------------------------------------------------------------
-// 前置自评
-// ------------------------------------------------------------
-function showPrereqModal(data) {
-  return new Promise((resolve) => {
-    const questions = data.questions || [];
-    const answers = data.answers || {};
-    prereqFocus.textContent = data.focus ? `前置焦点：${data.focus}` : "";
-    prereqQuestions.innerHTML = "";
-    const empty = questions.length === 0;
-    prereqEmpty.hidden = !empty;
-    prereqQuestions.hidden = empty;
-    btnPrereqSubmit.textContent = empty ? "知道了" : "提交";
-
-    questions.forEach((q) => {
-      const options = q.options && q.options.length ? q.options : SKILL_LEVELS;
-      const wrap = document.createElement("div");
-      wrap.className = "prereq-q";
-      wrap.innerHTML = `
-        <p class="prereq-q-prompt">${escapeHtml(q.prompt || "")}</p>
-        <p class="prereq-q-why">${escapeHtml(q.why || "")}</p>
-        <div class="prereq-options">${options
-          .map(
-            (opt) =>
-              `<label class="prereq-opt${answers[q.id] === opt ? " selected" : ""}">
-                <input type="radio" name="prereq-${escapeHtml(q.id)}" value="${escapeHtml(opt)}"${
-                  answers[q.id] === opt ? " checked" : ""
-                }>${escapeHtml(opt)}</label>`
-          )
-          .join("")}</div>`;
-      wrap.querySelectorAll(".prereq-opt input").forEach((input) => {
-        input.addEventListener("change", () => {
-          wrap.querySelectorAll(".prereq-opt").forEach((el) => el.classList.remove("selected"));
-          input.closest(".prereq-opt").classList.add("selected");
-        });
-      });
-      prereqQuestions.appendChild(wrap);
-    });
-
-    prereqModal.hidden = false;
-    const cleanup = () => {
-      prereqModal.hidden = true;
-      btnPrereqSubmit.onclick = null;
-      btnPrereqSkip.onclick = null;
-    };
-    btnPrereqSkip.onclick = () => {
-      cleanup();
-      resolve(false);
-    };
-    btnPrereqSubmit.onclick = async () => {
-      const collected = {};
-      if (!empty) {
-        for (const q of questions) {
-          const input = prereqQuestions.querySelector(
-            `input[name="prereq-${CSS.escape(q.id)}"]:checked`
-          );
-          if (!input) return showToast(`请先回答：${q.prompt || q.id}`);
-          collected[q.id] = input.value;
-        }
-      }
-      btnPrereqSubmit.disabled = true;
-      try {
-        await postJson("/api/prereq/answer", { doc_id: currentDocId(), answers: collected });
-        cleanup();
-        resolve(true);
-      } catch (e) {
-        showToast(e.message, 5000);
-      } finally {
-        btnPrereqSubmit.disabled = false;
-      }
-    };
-  });
-}
-
-async function openPrereq() {
-  if (!ready()) return showToast("资料还没解析完成");
-  if (!llmConfigured()) {
-    showToast("前置自评是可选的 AI 功能；请先在 API 配置页填写 Key 并启用模型");
-    return;
-  }
-  btnPrereq.disabled = true;
-  try {
-    let data = await api(`/api/prereq?doc_id=${encodeURIComponent(currentDocId())}`);
-    if (!data.cached) {
-      showToast("正在生成前置自评…", 1800);
-      data = await postJson("/api/prereq", { doc_id: currentDocId() });
-    }
-    await showPrereqModal(data);
-  } catch (e) {
-    showToast(e.message, 5000);
-  } finally {
-    btnPrereq.disabled = !ready();
-  }
-}
-
-btnPrereq.addEventListener("click", openPrereq);
 
 // ------------------------------------------------------------
 // 确认 / 配置 / 重置

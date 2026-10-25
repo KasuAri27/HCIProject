@@ -18,8 +18,11 @@
     <span class="brand">学习助手</span>
     <span class="crumb" id="topbar-crumb" hidden></span>
     <span class="grow"></span>
-    <button type="button" id="btn-chat-toggle" class="icon-btn chat-toggle" title="显示或隐藏右侧栏" aria-label="显示或隐藏右侧栏" aria-pressed="true">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>对话
+    <button type="button" id="btn-chat-toggle" class="icon-btn pane-toggle" title="显示或隐藏右侧栏" aria-label="显示或隐藏右侧栏" aria-pressed="true">
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="2.5" y="4" width="15" height="12" rx="2.2" fill="#ffffff" stroke="currentColor" stroke-width="1.8"/>
+        <path d="M12.6 4.9h2.9c.7 0 1.2.5 1.2 1.2v7.8c0 .7-.5 1.2-1.2 1.2h-2.9z" fill="currentColor"/>
+      </svg>
     </button>
     <a id="btn-settings" class="btn" href="/settings" title="工作台设置">设置</a>
     <a id="btn-avatar" class="topbar-avatar" href="/user" title="个人主页" aria-label="个人主页">
@@ -58,16 +61,6 @@
 
     <!-- 中栏：纸面 -->
     <main class="reading" id="reading">
-      <div class="doc-head" id="doc-head" hidden>
-        <div class="doc-head-main">
-          <h1 class="doc-title" id="doc-title"></h1>
-        </div>
-        <div class="doc-head-side">
-          <button type="button" id="btn-prereq" class="btn btn-small" disabled
-            title="可选：让 AI 根据这份资料出几道阅读前的基础自评">前置自评</button>
-        </div>
-        <div class="doc-progress" aria-hidden="true"><i id="doc-progress-bar"></i></div>
-      </div>
       <div class="version-note" id="doc-version-note" hidden></div>
 
       <div class="doc-scroll" id="doc-scroll">
@@ -260,24 +253,6 @@
 
   <!-- API 设置 -->
 
-
-  <!-- 前置自评 -->
-  <div class="modal-mask" id="prereq-modal" hidden>
-    <div class="modal modal-tall" role="dialog" aria-modal="true" aria-labelledby="prereq-title">
-      <h3 id="prereq-title">阅读前的基础自评</h3>
-      <p class="prereq-focus" id="prereq-focus"></p>
-      <p class="modal-lead">这一步是可选的，跳过不影响阅读。</p>
-      <div class="prereq-list" id="prereq-questions"></div>
-      <div class="prereq-none" id="prereq-empty" hidden>
-        <p>这份资料不需要补前置，直接读就行。</p>
-      </div>
-      <div class="modal-actions">
-        <button type="button" id="btn-prereq-skip" class="btn btn-quiet">跳过</button>
-        <span class="grow"></span>
-        <button type="button" id="btn-prereq-submit" class="btn btn-primary">提交</button>
-      </div>
-    </div>
-  </div>
 
   <div class="modal-mask" id="help-modal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title">

@@ -2453,3 +2453,28 @@ body.rail-right-closed #gutter-right {
   color: var(--page);
   text-align: center;
 }
+
+/* 右侧栏开关：图标按钮 */
+.pane-toggle {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  gap: 0;
+  color: var(--ink);
+  background: #f1f3f5;
+  border: 0;
+  border-radius: 8px;
+}
+.pane-toggle:hover {
+  color: var(--ink);
+  background: #e6ebef;
+}
+.pane-toggle.is-active {
+  color: var(--ink);
+  background: #f1f3f5;
+}
+.pane-toggle svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.8;
+}
