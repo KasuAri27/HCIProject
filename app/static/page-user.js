@@ -1,3 +1,4 @@
+(() => {
 "use strict";
 
 let profileState = { display_name: "", goal: "", avatar: "" };
@@ -23,6 +24,7 @@ function renderAvatar() {
     initial.hidden = false;
     remove.hidden = true;
   }
+  window.dispatchEvent(new CustomEvent("learning:profile", { detail: profileState }));
 }
 
 function renderProfile(profile) {
@@ -49,8 +51,14 @@ function renderStats(overview) {
 }
 
 async function loadProfile() {
-  const data = await pageFetch("/api/profile");
-  renderProfile(data.profile || {});
+  const controls = [...document.querySelectorAll("#profile-form input, #profile-form button")];
+  controls.forEach((control) => { control.disabled = true; });
+  try {
+    const data = await pageFetch("/api/profile");
+    renderProfile(data.profile || {});
+  } finally {
+    controls.forEach((control) => { control.disabled = false; });
+  }
 }
 
 async function loadStats() {
@@ -100,6 +108,12 @@ document.getElementById("btn-avatar-remove").addEventListener("click", async () 
   }
 });
 
-Promise.all([loadProfile(), loadStats()]).catch((error) => {
-  pageToast(error.message, "err");
+const dialog = document.getElementById("workspace-settings");
+let loaded = false;
+dialog.addEventListener("settings:open", (event) => {
+  if (event.detail.section !== "user") return;
+  const profile = loaded ? Promise.resolve() : loadProfile().then(() => { loaded = true; });
+  Promise.all([profile, loadStats()]).catch((error) => { pageToast(error.message, "err"); });
 });
+
+})();

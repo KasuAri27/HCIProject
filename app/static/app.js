@@ -1118,6 +1118,7 @@ function isTypingTarget(target) {
 }
 
 document.addEventListener("keydown", (e) => {
+  if (document.querySelector("#workspace-settings[open]")) return;
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
     e.preventDefault();
     toggleFocusMode();
@@ -2481,7 +2482,7 @@ function renderTopbarAvatar(profile) {
     topbarAvatarImg.removeAttribute("src");
     topbarAvatarInitial.hidden = false;
   }
-  btnAvatar.title = name ? `${name} · 个人主页` : "个人主页";
+  btnAvatar.title = name ? `${name} · 设置` : "打开设置";
 }
 
 async function loadTopbarProfile() {
@@ -2911,6 +2912,32 @@ window.addEventListener("storage", (event) => {
   ) {
     loadReadingSettings();
   }
+});
+window.addEventListener("learning:reading-settings", (event) => {
+  readFontSize = event.detail.fontSize;
+  readLineHeight = event.detail.lineHeight;
+  applyReadingSettings();
+});
+window.addEventListener("learning:profile", (event) => renderTopbarAvatar(event.detail));
+window.addEventListener("learning:api-config", async () => {
+  await refreshSessionQuiet();
+  resetChatSuggestions();
+  scheduleChatSuggestions();
+});
+window.addEventListener("learning:data-changed", (event) => {
+  if (event.detail && event.detail.reset) {
+    clearTimeout(notesSaveTimer);
+    clearTimeout(positionTimer);
+    clearTimeout(notesUndoTimer);
+    notesUndoStack = [];
+    ++docToken;
+    closeBubble();
+    pdfView.hidden = true;
+    docScroll.classList.remove("is-pdf");
+    clearPdfShell();
+    showEmpty();
+  }
+  loadPage();
 });
 document.addEventListener("DOMContentLoaded", () => {});
 switchTab("chat");

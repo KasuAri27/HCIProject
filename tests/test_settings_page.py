@@ -7,7 +7,7 @@ from test_phase2 import BaseTest
 
 class SettingsPageTests(BaseTest):
     def test_settings_page_renders_controls(self):
-        response = self.client.get("/settings")
+        response = self.client.get("/settings", follow_redirects=True)
         self.assertEqual(response.status_code, 200)
         html = response.get_data(as_text=True)
         self.assertIn("工作台设置", html)

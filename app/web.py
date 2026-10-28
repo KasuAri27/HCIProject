@@ -12,7 +12,7 @@ import threading
 from io import BytesIO
 from pathlib import Path
 
-from flask import Flask, Response, abort, jsonify, render_template, request, send_file, send_from_directory
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_file, send_from_directory, url_for
 
 from . import (
     api_config,
@@ -68,17 +68,17 @@ def index():
 
 @app.route("/user")
 def page_user():
-    return render_template("user.html", active_page="user")
+    return redirect(url_for("index", panel="user"))
 
 
 @app.route("/api-config")
 def page_api_config():
-    return render_template("api_config.html", active_page="api")
+    return redirect(url_for("index", panel="api", provider=request.args.get("provider") or None))
 
 
 @app.route("/settings")
 def page_settings():
-    return render_template("settings.html", active_page="settings")
+    return redirect(url_for("index", panel="reading"))
 
 
 @app.route("/library-assets/<path:filename>")

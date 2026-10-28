@@ -1,3 +1,4 @@
+(() => {
 "use strict";
 
 const FONT_KEY = "learning.readFontSize";
@@ -47,6 +48,7 @@ function applyReadingSettings() {
   } catch (error) {
     /* 忽略不可写的本地存储 */
   }
+  window.dispatchEvent(new CustomEvent("learning:reading-settings", { detail: { fontSize, lineHeight } }));
 }
 
 document.getElementById("btn-font-dec").addEventListener("click", () => {
@@ -102,6 +104,7 @@ document.getElementById("btn-rescan-library").addEventListener("click", async ()
         : `已登记 ${scan.registered || 0} 个文件`
     );
     await loadDataSummary();
+    window.dispatchEvent(new Event("learning:data-changed"));
   } catch (error) {
     pageToast(error.message, "err");
   } finally {
@@ -123,6 +126,7 @@ resetButton.addEventListener("click", async () => {
     await pageJson("/api/reset", "POST", {});
     disarmReset();
     pageToast("学习记录已清空，文档和 API 配置保留");
+    window.dispatchEvent(new CustomEvent("learning:data-changed", { detail: { reset: true } }));
     await loadDataSummary();
   } catch (error) {
     pageToast(error.message, "err");
@@ -131,5 +135,16 @@ resetButton.addEventListener("click", async () => {
   }
 });
 
-loadReadingSettings();
-loadDataSummary();
+const dialog = document.getElementById("workspace-settings");
+if (dialog) {
+  dialog.addEventListener("settings:open", (event) => {
+    if (event.detail.section === "reading") loadReadingSettings();
+    if (event.detail.section === "data") loadDataSummary();
+  });
+  dialog.addEventListener("close", disarmReset);
+} else {
+  loadReadingSettings();
+  loadDataSummary();
+}
+
+})();

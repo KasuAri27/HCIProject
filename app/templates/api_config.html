@@ -1,12 +1,7 @@
-{% extends "pages_base.html" %}
-{% block title %}API 配置{% endblock %}
-{% block crumb %}API 配置{% endblock %}
-
-{% block content %}
 <section class="page-head">
-  <h1>接线台</h1>
+  <h2 id="settings-api-title" tabindex="-1">API 配置</h2>
   <p class="page-intro">
-    把常用的模型服务接进来。扫描到的模型可以逐个启用；首页只显示启用的模型，切换时不会改动资料和学习记录。
+    把常用的模型服务接进来。扫描到的模型可以逐个启用；启用后可选择用于 AI 助教，切换时不会改动资料和学习记录。
   </p>
 </section>
 
@@ -91,8 +86,3 @@
     <button type="submit" class="pbtn pbtn-primary">添加服务</button>
   </form>
 </section>
-{% endblock %}
-
-{% block script %}
-<script src="{{ url_for('static', filename='page-api.js') }}"></script>
-{% endblock %}

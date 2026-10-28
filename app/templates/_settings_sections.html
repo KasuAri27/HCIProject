@@ -1,16 +1,6 @@
-{% extends "pages_base.html" %}
-{% block title %}设置{% endblock %}
-{% block crumb %}设置{% endblock %}
-
-{% block content %}
-<section class="page-head">
-  <h1>工作台设置</h1>
-  <p class="page-intro">调整阅读手感，查看快捷键，或清理这台电脑上的学习记录。资料和 API 配置不会被阅读设置影响。</p>
-</section>
-
-<section class="settings-section">
+<section class="settings-section workspace-section" hidden id="settings-reading" aria-labelledby="settings-reading-title">
   <header class="settings-head">
-    <h2>阅读</h2>
+    <h2 id="settings-reading-title" tabindex="-1">阅读</h2>
     <button type="button" class="text-btn" id="btn-reading-reset">恢复默认</button>
   </header>
   <div class="reading-settings-grid">
@@ -37,7 +27,7 @@
           <button type="button" data-line="2.1">宽松</button>
         </div>
       </div>
-      <p class="settings-note">修改会立即保存在本机，阅读页下次打开时同步。</p>
+      <p class="settings-note">修改会保存在本机，并同步到阅读台。</p>
     </div>
     <figure class="reading-preview" id="reading-preview">
       <figcaption>纸面预览</figcaption>
@@ -48,9 +38,9 @@
   </div>
 </section>
 
-<section class="settings-section">
+<section class="settings-section workspace-section" hidden id="settings-data" aria-labelledby="settings-data-title">
   <header class="settings-head">
-    <h2>学习数据</h2>
+    <h2 id="settings-data-title" tabindex="-1">学习数据</h2>
     <span class="settings-note" id="data-summary"></span>
   </header>
   <div class="setting-row">
@@ -69,9 +59,9 @@
   </div>
 </section>
 
-<section class="settings-section">
+<section class="settings-section workspace-section" hidden id="settings-shortcuts" aria-labelledby="settings-shortcuts-title">
   <header class="settings-head">
-    <h2>快捷键</h2>
+    <h2 id="settings-shortcuts-title" tabindex="-1">快捷键</h2>
   </header>
   <dl class="shortcut-table">
     <div><dt><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dt><dd>发送对话</dd></div>
@@ -82,21 +72,16 @@
   </dl>
 </section>
 
-<section class="settings-section">
+<section class="settings-section workspace-section" hidden id="settings-about" aria-labelledby="settings-about-title">
   <header class="settings-head">
-    <h2>关于</h2>
+    <h2 id="settings-about-title" tabindex="-1">关于</h2>
   </header>
   <p class="about-copy">
     学习助手把资料、模型配置和学习记录都留在本机。AI 是可选能力，不配置也能阅读、标注和记笔记。
   </p>
   <div class="about-links">
-    <a href="/user">用户与 API 服务</a>
-    <a href="/api-config">模型接线台</a>
-    <a href="/">回到阅读台</a>
+    <button type="button" class="text-btn" data-settings-section="user">读者档案</button>
+    <button type="button" class="text-btn" data-settings-section="api">API 配置</button>
+    <button type="button" class="text-btn" data-settings-close>回到阅读台</button>
   </div>
 </section>
-{% endblock %}
-
-{% block script %}
-<script src="{{ url_for('static', filename='page-settings.js') }}"></script>
-{% endblock %}

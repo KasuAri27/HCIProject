@@ -1,3 +1,4 @@
+(() => {
 "use strict";
 
 const PROVIDER_COLORS = {
@@ -11,6 +12,7 @@ const PROVIDER_COLORS = {
 let state = { providers: [], active: {}, enabled_models: [] };
 let selectedId = "";
 let deleteArmed = false;
+let lastRenderedState = "";
 
 const providerList = document.getElementById("provider-list");
 const providerCount = document.getElementById("provider-count");
@@ -142,6 +144,11 @@ function render() {
   deleteArmed = false;
   deleteButton.textContent = "删除服务";
   deleteButton.classList.remove("is-armed");
+  const signature = JSON.stringify(state);
+  if (signature !== lastRenderedState) {
+    lastRenderedState = signature;
+    window.dispatchEvent(new Event("learning:api-config"));
+  }
 }
 
 async function reloadState(preferredId = "") {
@@ -408,8 +415,24 @@ document.getElementById("custom-form").addEventListener("submit", addCustomProvi
 
 const requestedProvider =
   new URLSearchParams(window.location.search).get("provider") || "";
-reloadState(requestedProvider).catch((error) => {
-  providerEmpty.hidden = false;
-  providerEmpty.textContent = `读取配置失败：${error.message}`;
-  pageToast(error.message, "err");
+let loaded = false;
+const dialog = document.getElementById("workspace-settings");
+dialog.addEventListener("settings:open", (event) => {
+  if (event.detail.section !== "api" || loaded) return;
+  loaded = true;
+  reloadState(requestedProvider).catch((error) => {
+    loaded = false;
+    providerEmpty.hidden = false;
+    providerEmpty.textContent = `读取配置失败：${error.message}`;
+    pageToast(error.message, "err");
+  });
 });
+dialog.addEventListener("close", () => {
+  keyInput.value = "";
+  document.getElementById("custom-key").value = "";
+  deleteArmed = false;
+  deleteButton.textContent = "删除服务";
+  deleteButton.classList.remove("is-armed");
+});
+
+})();

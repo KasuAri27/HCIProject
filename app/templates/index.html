@@ -6,6 +6,8 @@
   <title>学习助手</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/katex/katex.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='pages.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='workspace-menu.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/pdfjs/web/pdf_viewer.css') }}">
 </head>
 <body>
@@ -25,11 +27,12 @@
         <path class="pane-toggle-detail" d="M17.5 8v8"/>
       </svg>
     </button>
-    <a id="btn-settings" class="btn" href="/settings" title="工作台设置">设置</a>
-    <a id="btn-avatar" class="topbar-avatar" href="/user" title="个人主页" aria-label="个人主页">
-      <img id="topbar-avatar-img" alt="" hidden>
-      <span id="topbar-avatar-initial" aria-hidden="true">读</span>
-    </a>
+    <button type="button" id="btn-avatar" class="profile-trigger" title="打开设置" aria-label="打开设置" aria-haspopup="dialog" aria-controls="workspace-settings" aria-expanded="false">
+      <span class="topbar-avatar">
+        <img id="topbar-avatar-img" alt="" hidden>
+        <span id="topbar-avatar-initial" aria-hidden="true">读</span>
+      </span>
+    </button>
   </header>
 
   <div class="job-strip" id="job-strip" hidden></div>
@@ -235,6 +238,34 @@
     </aside>
   </div>
 
+  <dialog class="workspace-settings" id="workspace-settings" aria-labelledby="workspace-settings-title">
+    <header class="workspace-settings-head">
+      <h2 id="workspace-settings-title">工作台设置</h2>
+      <button type="button" class="icon-btn" id="btn-settings-close" aria-label="关闭设置"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button>
+    </header>
+    <div class="workspace-settings-body">
+      <nav class="workspace-settings-nav" aria-label="设置板块">
+        <button type="button" data-settings-section="user" aria-pressed="true">个人</button>
+        <button type="button" data-settings-section="api" aria-pressed="false">API 配置</button>
+        <button type="button" data-settings-section="reading" aria-pressed="false">阅读</button>
+        <button type="button" data-settings-section="data" aria-pressed="false">学习数据</button>
+        <button type="button" data-settings-section="shortcuts" aria-pressed="false">快捷键</button>
+        <button type="button" data-settings-section="about" aria-pressed="false">关于</button>
+      </nav>
+      <div class="workspace-settings-content">
+        <section class="workspace-section" id="settings-user" aria-labelledby="settings-user-title">
+          <header class="settings-head"><h2 id="settings-user-title" tabindex="-1">读者档案</h2></header>
+          {% include "user.html" %}
+        </section>
+        <section class="workspace-section" id="settings-api" aria-labelledby="settings-api-title" hidden>
+          {% include "api_config.html" %}
+        </section>
+        {% include "_settings_sections.html" %}
+      </div>
+    </div>
+    <div class="page-toast" id="page-toast" role="status" hidden></div>
+  </dialog>
+
   <!-- 通用确认 -->
   <div class="modal-mask" id="confirm-modal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
@@ -271,5 +302,10 @@
   <script src="{{ url_for('static', filename='vendor/katex/katex.min.js') }}"></script>
   <script src="{{ url_for('static', filename='vendor/katex/auto-render.min.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-common.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-user.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-api.js') }}"></script>
+  <script src="{{ url_for('static', filename='workspace-menu.js') }}"></script>
 </body>
 </html>
