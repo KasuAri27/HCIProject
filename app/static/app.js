@@ -13,16 +13,22 @@ let currentVersionId = "";
 let currentBlocks = [];
 let currentViewMode = "markdown";
 let currentPdfUrl = "";
-let annotations = [];
 let selectedDocId = "";
 
 let chatMessages = [];
+let chatSending = false;
+let suggestionsTimer = null;
+let suggestionsSequence = 0;
+let suggestionsController = null;
+let suggestionsKey = "";
+let pdfReadingPage = 1;
 let notesDocId = "";
 let notesTitle = "";
 let notesContent = "";
 let notesDirty = false;
 let notesSuggestions = [];
 let notesDraftText = "";
+let notesDraftRequest = null;
 let notesAutoSuggestDoc = "";
 let notesSaveTimer = null;
 let notesSaving = false;
@@ -34,6 +40,33 @@ let lastSubmission = null;
 let selection = null;
 let spotBubbleLoading = false;
 let activeTab = "chat";
+let railLeftPinned = false;
+let pdfShellPromise = null;
+
+function getPdfShell() {
+  if (!pdfShellPromise) pdfShellPromise = import("./pdf-viewer.js?v=6.4.299-3");
+  return pdfShellPromise;
+}
+
+async function showPdfShell(url) {
+  if (!url) return;
+  try {
+    const shell = await getPdfShell();
+    await shell.loadPdf(url);
+  } catch (error) {
+    showToast(`PDF 阅读器加载失败：${error.message || error}`, 5000);
+  }
+}
+
+async function clearPdfShell() {
+  if (!pdfShellPromise) return;
+  try {
+    const shell = await pdfShellPromise;
+    await shell.clearPdf();
+  } catch (error) {
+    /* 阅读器尚未就绪 */
+  }
+}
 let docToken = 0;
 
 let jobsTimer = null;
@@ -64,7 +97,7 @@ const SKILL_LEVELS = ["不会", "了解", "能用", "熟悉"];
 const $ = (id) => document.getElementById(id);
 
 const btnRailToggle = $("btn-rail-toggle");
-const btnAnnotToggle = $("btn-annot-toggle");
+const btnChatToggle = $("btn-chat-toggle");
 const btnHelpClose = $("btn-help-close");
 const helpModal = $("help-modal");
 const topbarCrumb = $("topbar-crumb");
@@ -84,22 +117,13 @@ const searchPanel = $("search-panel");
 const searchSummary = $("search-summary");
 const searchResults = $("search-results");
 const btnAskCross = $("btn-ask-cross");
-const readRatio = $("read-ratio");
-const readBar = $("read-bar");
-const noteCountEl = $("note-count");
-const exerciseCountEl = $("exercise-count");
 const gutterLeft = $("gutter-left");
 const gutterRight = $("gutter-right");
 
-const docHead = $("doc-head");
-const docTitle = $("doc-title");
 const docVersionNote = $("doc-version-note");
-const btnPrereq = $("btn-prereq");
-const docProgressBar = $("doc-progress-bar");
 const docScroll = $("doc-scroll");
 const docEmpty = $("doc-empty");
 const pdfView = $("pdf-view");
-const pdfFrame = $("pdf-frame");
 const docPage = $("doc-page");
 const docBody = $("doc-body");
 
@@ -111,7 +135,6 @@ const bubbleAnswer = $("select-bubble-answer");
 const btnSpotAsk = $("btn-spot-ask");
 const btnThrowChat = $("btn-throw-chat");
 const btnQuoteNote = $("btn-quote-note");
-const btnHighlight = $("btn-highlight");
 const btnModeExplain = $("btn-mode-explain");
 const btnModeExample = $("btn-mode-example");
 const btnModePrereq = $("btn-mode-prereq");
@@ -125,13 +148,10 @@ const checkSelfRate = $("check-self-rate");
 const tabButtons = Array.from(document.querySelectorAll(".tab"));
 const tabInk = $("tab-ink");
 const badgeChat = $("badge-chat");
-const badgeAnnotations = $("badge-annotations");
 const dotNotes = $("dot-notes");
 const dotExercise = $("dot-exercise");
-const dotReview = $("dot-review");
-const annotCount = $("annot-count");
-const annotationsList = $("annotations-list");
 const chatMessagesEl = $("chat-messages");
+const chatSuggestionsEl = $("chat-suggestions");
 const chatInput = $("chat-input");
 const btnChatSend = $("btn-chat-send");
 const notesEmpty = $("notes-empty");
@@ -148,6 +168,8 @@ const notesDraftBody = $("notes-draft-body");
 const notesDraftReplace = $("notes-draft-replace");
 const btnNotesDraftApply = $("btn-notes-draft-apply");
 const btnNotesDraftDiscard = $("btn-notes-draft-discard");
+const notesGenerationStatus = $("notes-generation-status");
+const notesDraftHeading = $("notes-draft-heading");
 const btnNotesRefreshSuggest = $("btn-notes-refresh-suggest");
 const notesSuggestionsList = $("notes-suggestions-list");
 const btnExercise = $("btn-exercise");
@@ -160,8 +182,6 @@ const btnExerciseNext = $("btn-exercise-next");
 const exerciseSelfRate = $("exercise-self-rate");
 const exerciseEvidenceStatus = $("exercise-evidence-status");
 const lastReview = $("last-review");
-const understandingCountEl = $("understanding-count");
-const practiceCountEl = $("practice-count");
 
 const confirmModal = $("confirm-modal");
 const confirmModalTitle = $("confirm-modal-title");
@@ -170,12 +190,6 @@ const btnConfirmCancel = $("btn-confirm-cancel");
 const btnConfirmOk = $("btn-confirm-ok");
 let confirmResolver = null;
 
-const prereqModal = $("prereq-modal");
-const prereqFocus = $("prereq-focus");
-const prereqQuestions = $("prereq-questions");
-const prereqEmpty = $("prereq-empty");
-const btnPrereqSkip = $("btn-prereq-skip");
-const btnPrereqSubmit = $("btn-prereq-submit");
 const toastEl = $("toast");
 
 // ------------------------------------------------------------
@@ -270,7 +284,6 @@ function switchTab(name) {
   });
   moveTabInk();
   if (name === "notes") onNotesTabShown();
-  if (name === "annotations") renderAnnotations();
 }
 
 tabButtons.forEach((btn) => {
@@ -294,30 +307,81 @@ function syncScrim() {
   );
 }
 
+function railRightOpen() {
+  return isNarrow()
+    ? document.body.classList.contains("rail-right-open")
+    : !document.body.classList.contains("rail-right-closed");
+}
+
+function syncChatToggle() {
+  if (!btnChatToggle) return;
+  const open = railRightOpen();
+  btnChatToggle.classList.toggle("is-active", open);
+  btnChatToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  const label = open ? "收起 AI 侧栏" : "展开 AI 侧栏";
+  btnChatToggle.setAttribute("aria-label", label);
+  btnChatToggle.title = label;
+}
+
+function setLeftRail(open, pinned = false) {
+  document.body.classList.toggle("rail-left-open", open);
+  railLeftPinned = open && pinned;
+  if (open) document.body.classList.remove("rail-left-open-pinned");
+  syncScrim();
+}
+
+function setRightRail(open) {
+  if (isNarrow()) {
+    document.body.classList.toggle("rail-right-open", open);
+    document.body.classList.remove("rail-right-closed");
+  } else {
+    document.body.classList.toggle("rail-right-closed", !open);
+    document.body.classList.remove("rail-right-open");
+  }
+  syncChatToggle();
+  syncScrim();
+}
+
 btnRailToggle.addEventListener("click", () => {
-  document.body.classList.toggle("rail-left-open");
+  if (
+    document.body.classList.contains("rail-left-open") &&
+    !railLeftPinned
+  ) {
+    railLeftPinned = true;
+    return;
+  }
+  const open = !document.body.classList.contains("rail-left-open");
+  setLeftRail(open, open);
+});
+btnRailToggle.addEventListener("mouseenter", () => {
+  if (!document.body.classList.contains("rail-left-open")) {
+    setLeftRail(true, false);
+  }
+});
+railLeft.addEventListener("mouseleave", (event) => {
+  if (railLeftPinned) return;
+  if (event.relatedTarget && railLeft.contains(event.relatedTarget)) return;
+  setLeftRail(false, false);
+});
+document.addEventListener("click", (event) => {
+  if (!document.body.classList.contains("rail-left-open")) return;
+  if (railLeft.contains(event.target) || btnRailToggle.contains(event.target)) return;
+  setLeftRail(false, false);
+});
+
+btnChatToggle.addEventListener("click", () => setRightRail(!railRightOpen()));
+document.addEventListener("click", (event) => {
+  if (!document.body.classList.contains("rail-right-open")) return;
+  if (railRight.contains(event.target) || btnChatToggle.contains(event.target)) return;
   document.body.classList.remove("rail-right-open");
   syncScrim();
-});
-btnAnnotToggle.addEventListener("click", () => {
-  document.body.classList.toggle("rail-right-open");
-  document.body.classList.remove("rail-left-open");
-  syncScrim();
-});
-document.addEventListener("click", (e) => {
-  if (e.target === document.body && document.body.classList.contains("has-scrim")) {
-    document.body.classList.remove("rail-left-open", "rail-right-open");
-    syncScrim();
-  }
+  syncChatToggle();
 });
 
 function openRightRail() {
-  if (isNarrow()) {
-    document.body.classList.add("rail-right-open");
-    document.body.classList.remove("rail-left-open");
-    syncScrim();
-  }
+  setRightRail(true);
 }
+syncChatToggle();
 
 // ------------------------------------------------------------
 // 可拖拽分栏
@@ -376,19 +440,6 @@ function applyLibrary(payload) {
   libraryState = payload || {};
   documents = Array.isArray(payload && payload.documents) ? payload.documents : [];
   if (payload && payload.overview) session = session ? { ...session, overview: payload.overview } : session;
-}
-
-function renderStats() {
-  const o = (libraryState.overview || (session && session.overview) || {});
-  const total = o.document_count || 0;
-  const read = o.read_count || 0;
-  readRatio.textContent = `${read} / ${total}`;
-  readBar.style.width = total ? `${Math.max(4, Math.round((read / total) * 100))}%` : "0";
-  noteCountEl.textContent = String(o.note_count || 0);
-  exerciseCountEl.textContent = String(o.exercise_count || 0);
-  if (understandingCountEl) understandingCountEl.textContent = String(o.understanding_count || 0);
-  if (practiceCountEl) practiceCountEl.textContent = String(o.practice_count || 0);
-  libraryCount.textContent = String(total);
 }
 
 function renderLibrary() {
@@ -590,10 +641,17 @@ async function focusBlock(blockId, docId = "") {
     const block = currentBlocks.find((item) => item.id === blockId);
     const locator = (block && block.locator) || {};
     const page = locator.page || locator.slide;
-    if (page && currentPdfUrl) {
-      const base = currentPdfUrl.split("#")[0];
-      pdfFrame.src = `${base}#page=${encodeURIComponent(page)}&zoom=page-width`;
-      showToast(`已定位到第 ${page} 页`);
+    if (page) {
+      try {
+        const shell = await getPdfShell();
+        if (shell.goToPage(page)) {
+          showToast(`已定位到第 ${page} 页`);
+        } else {
+          showToast("PDF 页码超出范围");
+        }
+      } catch (error) {
+        showToast("PDF 阅读器尚未就绪");
+      }
     } else {
       showToast("已打开资料；PDF 播放模式无法精确定位该段");
     }
@@ -703,7 +761,6 @@ async function pollJobs() {
     const payload = await api("/api/library");
     const wasReadyDoc = currentDocId();
     applyLibrary(payload);
-    renderStats();
     renderLibrary();
     renderJobStrip();
     if (!(payload.jobs || []).length) {
@@ -736,8 +793,7 @@ async function retryImportJob(jobId) {
 async function fetchLibraryData() {
   const payload = await api("/api/library");
   applyLibrary(payload);
-  renderStats();
-  renderLibrary();
+    renderLibrary();
   renderJobStrip();
   return payload;
 }
@@ -760,7 +816,6 @@ async function refreshLibrary() {
   try {
     const payload = await api("/api/library/scan", { method: "POST" });
     applyLibrary(payload);
-    renderStats();
     renderLibrary();
     renderJobStrip();
     await maybeReloadCurrentDoc();
@@ -872,7 +927,6 @@ async function loadPage() {
     ]);
     session = sessionData;
     applyLibrary(libraryData);
-    renderStats();
     renderLibrary();
     renderJobStrip();
     updateLlmStatus();
@@ -897,9 +951,13 @@ async function loadDocument(docId, options = {}) {
     return;
   }
   if (notesDirty) await saveNotesNow();
+  stopNotesDraft(false);
   await savePositionNow();
 
   const token = ++docToken;
+  closeBubble(true);
+  resetChatSuggestions();
+  pdfReadingPage = 1;
   selectedDocId = docId;
   currentDoc = documents.find((d) => d.id === docId) || currentDoc;
 
@@ -912,7 +970,6 @@ async function loadDocument(docId, options = {}) {
     currentContent = data;
     currentVersionId = data.version && data.version.id ? data.version.id : "";
     currentBlocks = data.blocks || [];
-    annotations = data.annotations || [];
     exerciseReview.innerHTML = "";
     codeEditor.value = "";
     btnExerciseNext.hidden = true;
@@ -921,6 +978,7 @@ async function loadDocument(docId, options = {}) {
     await loadChat(docId);
     await loadLearningEvidence(docId);
     await refreshSessionQuiet();
+    scheduleChatSuggestions();
     renderExercise();
     renderReview();
     updateTabBadges();
@@ -937,8 +995,6 @@ async function loadDocument(docId, options = {}) {
 }
 
 function renderDocView(data) {
-  docHead.hidden = false;
-  docTitle.textContent = (data.document && data.document.title) || "未命名资料";
   topbarCrumb.hidden = false;
   topbarCrumb.textContent = (data.document && (data.document.source_name || data.document.title)) || "";
   const versions = data.versions || [];
@@ -957,7 +1013,6 @@ function renderDocView(data) {
       docVersionNote.textContent = "";
     }
   }
-  btnPrereq.disabled = data.status !== "ready";
   currentViewMode = data.view_mode === "pdf" ? "pdf" : "markdown";
   currentPdfUrl = data.pdf_url || "";
 
@@ -965,11 +1020,9 @@ function renderDocView(data) {
     pdfView.hidden = true;
     docScroll.classList.remove("is-pdf");
     docPage.hidden = true;
+    clearPdfShell();
     docEmpty.hidden = false;
     renderStatusCard(data);
-    docProgressBar.style.width = "0";
-    annotations = [];
-    renderAnnotations();
     renderExercise();
     return;
   }
@@ -986,15 +1039,13 @@ function renderDocView(data) {
     pdfView.hidden = false;
     docScroll.classList.add("is-pdf");
     docBody.innerHTML = "";
-    pdfFrame.src = currentPdfUrl;
-    docProgressBar.style.width = "0";
-    renderAnnotations();
+    showPdfShell(currentPdfUrl);
     return;
   }
 
   pdfView.hidden = true;
   docScroll.classList.remove("is-pdf");
-  pdfFrame.src = "about:blank";
+  clearPdfShell();
   docEmpty.hidden = true;
   docPage.hidden = false;
   docBody.innerHTML = data.html || "";
@@ -1002,12 +1053,9 @@ function renderDocView(data) {
   attachCopyButtons(docBody);
   attachHashLinks(docBody);
   bindBlockClicks();
-  applyHighlights();
-  renderAnnotations();
 
   setTimeout(() => {
     restorePosition(data.position);
-    updateDocProgress();
     setTimeout(() => {
       suppressPositionSave = false;
     }, 450);
@@ -1070,6 +1118,7 @@ function isTypingTarget(target) {
 }
 
 document.addEventListener("keydown", (e) => {
+  if (document.querySelector("#workspace-settings[open]")) return;
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
     e.preventDefault();
     toggleFocusMode();
@@ -1124,7 +1173,8 @@ function renderStatusCard(data) {
 }
 
 function showEmpty() {
-  docHead.hidden = true;
+  stopNotesDraft(false);
+  resetChatSuggestions();
   docPage.hidden = true;
   docEmpty.hidden = false;
   topbarCrumb.hidden = true;
@@ -1133,7 +1183,6 @@ function showEmpty() {
   currentContent = null;
   currentVersionId = "";
   currentBlocks = [];
-  annotations = [];
   questionCache = "";
   lastSubmission = null;
   chatMessages = [];
@@ -1146,6 +1195,8 @@ function showEmpty() {
   notesContentEl.value = "";
   notesDraftWrap.hidden = true;
   notesDraftBody.innerHTML = "";
+  notesDraftText = "";
+  notesGenerationStatus.textContent = "";
   notesSuggestions = [];
   notesAutoSuggestDoc = "";
   renderSuggestions();
@@ -1153,7 +1204,6 @@ function showEmpty() {
   setSaveState("", "");
   exerciseReview.innerHTML = "";
   codeEditor.value = "";
-  renderAnnotations();
   renderExercise();
   renderReview();
   renderSidebarActive();
@@ -1210,7 +1260,6 @@ async function refreshSessionQuiet() {
     updateLlmStatus();
     renderExercise();
     renderReview();
-    renderStats();
     updateTabBadges();
     renderLibrary();
   } catch (e) {
@@ -1224,12 +1273,6 @@ async function refreshSessionQuiet() {
 // ------------------------------------------------------------
 // 阅读位置
 // ------------------------------------------------------------
-function updateDocProgress() {
-  const max = docScroll.scrollHeight - docScroll.clientHeight;
-  const pct = max > 0 ? (docScroll.scrollTop / max) * 100 : 0;
-  docProgressBar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
-}
-
 function collectPosition() {
   if (!ready() || !currentVersionId || !currentBlocks.length) return null;
   const nodes = Array.from(docBody.querySelectorAll(".doc-block[data-block-id]"));
@@ -1285,14 +1328,12 @@ async function savePositionNow(beacon = false) {
 
 function restorePosition(position) {
   if (!position || position.version_id !== currentVersionId || !position.block_id) {
-    updateDocProgress();
     return;
   }
   const block = docBody.querySelector(
     `.doc-block[data-block-id="${CSS.escape(position.block_id)}"]`
   );
   if (!block) {
-    updateDocProgress();
     return;
   }
   const containerTop = docScroll.getBoundingClientRect().top;
@@ -1301,12 +1342,15 @@ function restorePosition(position) {
   const target = top + (position.block_offset || 0) * height - 10;
   suppressPositionSave = true;
   docScroll.scrollTop = Math.max(0, target);
-  updateDocProgress();
 }
 
 docScroll.addEventListener("scroll", () => {
-  updateDocProgress();
   schedulePositionSave();
+  scheduleChatSuggestions();
+});
+window.addEventListener("learning:pdf-page", (event) => {
+  pdfReadingPage = event.detail.page;
+  scheduleChatSuggestions();
 });
 
 window.addEventListener("beforeunload", () => {
@@ -1340,6 +1384,7 @@ function closeBubble(force = false) {
   bubbleInput.value = "";
   selection = null;
   resetCheckUi();
+  scheduleChatSuggestions();
 }
 
 function openBubble(info) {
@@ -1352,6 +1397,7 @@ function openBubble(info) {
   bubble.hidden = false;
   openRightRail();
   switchTab("chat");
+  scheduleChatSuggestions();
 }
 
 function selectionOffsets(block, range, which) {
@@ -1418,210 +1464,87 @@ document.addEventListener("mousedown", (e) => {
   closeBubble();
 });
 
-function applyHighlights() {
-  if (!docBody) return;
-  docBody.querySelectorAll("mark.hl").forEach((mark) => {
-    mark.replaceWith(document.createTextNode(mark.textContent || ""));
-  });
-  docBody.normalize();
-  for (const annotation of annotations) {
-    if (annotation.version_id && annotation.version_id !== currentVersionId) continue;
-    const block = docBody.querySelector(
-      `.doc-block[data-block-id="${CSS.escape(annotation.block_id)}"]`
-    );
-    if (!block) continue;
-    wrapRange(
-      block,
-      annotation.start_offset,
-      annotation.end_offset,
-      annotation.id,
-      annotation.color || "amber"
-    );
-  }
-}
-
-function wrapRange(block, start, end, annotationId, color) {
-  const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
-  const segments = [];
-  let pos = 0;
-  let node = walker.nextNode();
-  while (node) {
-    const length = node.nodeValue ? node.nodeValue.length : 0;
-    const nodeStart = pos;
-    const nodeEnd = pos + length;
-    if (nodeEnd > start && nodeStart < end) {
-      segments.push({ node, nodeStart, nodeEnd });
-    }
-    pos = nodeEnd;
-    node = walker.nextNode();
-  }
-  for (const segment of segments) {
-    const from = Math.max(start, segment.nodeStart) - segment.nodeStart;
-    const to = Math.min(end, segment.nodeEnd) - segment.nodeStart;
-    if (to <= from) continue;
-    const range = document.createRange();
-    range.setStart(segment.node, from);
-    range.setEnd(segment.node, to);
-    const mark = document.createElement("mark");
-    mark.className = `hl hl-${color}`;
-    mark.dataset.annotationId = annotationId;
-    try {
-      range.surroundContents(mark);
-    } catch (e) {
-      /* 跨节点异常时跳过，不影响正文 */
-    }
-  }
-}
-
-async function createHighlight() {
-  if (!selection || !ready()) {
-    showToast("先打开一份资料并选中文字");
-    return;
-  }
-  try {
-    const data = await postJson(`/api/documents/${currentDocId()}/annotations`, {
-      doc_id: currentDocId(),
-      version_id: currentVersionId,
-      block_id: selection.blockId,
-      start_offset: selection.start,
-      end_offset: selection.end,
-      quote: selection.quote,
-      note: "",
-      color: "amber",
-    });
-    const annotation = data.annotation;
-    annotation.locator_label = selection.locator;
-    annotations.push(annotation);
-    closeBubble(true);
-    applyHighlights();
-    renderAnnotations();
-    updateTabBadges();
-    switchTab("annotations");
-    showToast("已高亮，可以写批注");
-  } catch (e) {
-    showToast(e.message, 5000);
-  }
-}
-
-function renderAnnotations() {
-  annotCount.textContent = annotations.length ? `${annotations.length} 条` : "";
-  if (!annotations.length) {
-    const hasOldVersions =
-      currentContent && (currentContent.versions || []).length > 1;
-    const emptyText =
-      currentViewMode === "pdf"
-        ? "PDF 播放模式暂不支持划选标注；已有标注仍保留在数据库。"
-        : hasOldVersions
-        ? "当前版本还没有标注；旧版本的标注仍保留，但不会显示在这里。"
-        : "在正文里选中一段文字，点「高亮」，这里会出现标注。";
-    annotationsList.innerHTML = `<p class="empty">${emptyText}</p>`;
-    updateTabBadges();
-    return;
-  }
-  annotationsList.innerHTML = annotations
-    .map(
-      (a) => `
-      <div class="annotation-item" data-id="${escapeHtml(a.id)}">
-        <blockquote class="annotation-quote color-${escapeHtml(a.color || "amber")}">${escapeHtml(
-          a.quote || ""
-        )}</blockquote>
-        <p class="annotation-locator">${escapeHtml(a.locator_label || "")}</p>
-        <textarea class="annotation-note" placeholder="写点批注（可选）">${escapeHtml(
-          a.note || ""
-        )}</textarea>
-        <div class="annotation-actions">
-          <select class="annotation-color" aria-label="高亮颜色">
-            ${["amber", "teal", "rose"]
-              .map(
-                (c) =>
-                  `<option value="${c}"${a.color === c ? " selected" : ""}>${
-                    c === "amber" ? "琥珀" : c === "teal" ? "青" : "玫红"
-                  }</option>`
-              )
-              .join("")}
-          </select>
-          <button type="button" class="btn btn-small annot-save">保存批注</button>
-          <button type="button" class="btn btn-small btn-quiet annot-locate">定位</button>
-          <button type="button" class="btn btn-small btn-quiet annot-delete">删除</button>
-        </div>
-      </div>`
-    )
-    .join("");
-  annotationsList.querySelectorAll(".annotation-item").forEach((item) => {
-    const id = item.dataset.id;
-    const note = item.querySelector(".annotation-note");
-    const color = item.querySelector(".annotation-color");
-    item.querySelector(".annot-save").addEventListener("click", async () => {
-      try {
-        const data = await api(`/api/annotations/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ note: note.value }),
-        });
-        const found = annotations.find((a) => a.id === id);
-        if (found) found.note = data.annotation.note;
-        showToast("批注已保存");
-      } catch (e) {
-        showToast(e.message, 5000);
-      }
-    });
-    color.addEventListener("change", async () => {
-      try {
-        const value = color.value;
-        await api(`/api/annotations/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ color: value }),
-        });
-        const found = annotations.find((a) => a.id === id);
-        if (found) found.color = value;
-        applyHighlights();
-        renderAnnotations();
-        updateTabBadges();
-      } catch (e) {
-        showToast(e.message, 5000);
-      }
-    });
-    item.querySelector(".annot-locate").addEventListener("click", () => {
-      const mark = docBody.querySelector(`mark.hl[data-annotation-id="${CSS.escape(id)}"]`);
-      if (mark) {
-        mark.scrollIntoView({ behavior: "smooth", block: "center" });
-        mark.classList.add("hl-flash");
-        setTimeout(() => mark.classList.remove("hl-flash"), 1000);
-      } else {
-        showToast("这段内容在当前版本里找不到了");
-      }
-    });
-    item.querySelector(".annot-delete").addEventListener("click", async () => {
-      const ok = await showConfirm("删除这条标注？", "高亮和批注都会被移除，不可恢复。");
-      if (!ok) return;
-      try {
-        await api(`/api/annotations/${id}`, { method: "DELETE" });
-        annotations = annotations.filter((a) => a.id !== id);
-        applyHighlights();
-        renderAnnotations();
-        updateTabBadges();
-        showToast("标注已删除");
-      } catch (e) {
-        showToast(e.message, 5000);
-      }
-    });
-  });
-  updateTabBadges();
-}
-
 // ------------------------------------------------------------
 // 对话
 // ------------------------------------------------------------
-function renderChat() {
-  if (!currentDocId()) {
-    chatMessagesEl.innerHTML = '<p class="empty">打开一份资料后，这里可以就它提问。</p>';
-    updateTabBadges();
+const DEFAULT_CHAT_QUESTIONS = [
+  "帮我梳理这份资料的重点",
+  "用一个例子解释核心概念",
+  "出一道题，检查我的理解",
+];
+
+function renderChatSuggestions(questions = DEFAULT_CHAT_QUESTIONS, source = "default") {
+  chatSuggestionsEl.replaceChildren();
+  chatSuggestionsEl.dataset.source = source;
+  questions.forEach((question) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chat-suggestion";
+    button.disabled = chatSending;
+    button.title = `发送：${question}`;
+    const text = document.createElement("span");
+    text.textContent = question;
+    button.appendChild(text);
+    button.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15 4v7a2 2 0 0 1-2 2H4m4-4-4 4 4 4"/></svg>');
+    button.addEventListener("click", () => sendChat(question, selection?.quote || ""));
+    chatSuggestionsEl.appendChild(button);
+  });
+}
+
+function resetChatSuggestions() {
+  clearTimeout(suggestionsTimer);
+  ++suggestionsSequence;
+  suggestionsController?.abort();
+  suggestionsKey = "";
+  chatSuggestionsEl.setAttribute("aria-busy", "false");
+  renderChatSuggestions();
+}
+
+function scheduleChatSuggestions() {
+  clearTimeout(suggestionsTimer);
+  suggestionsTimer = setTimeout(refreshChatSuggestions, 600);
+}
+
+async function refreshChatSuggestions() {
+  if (chatSending) return;
+  if (!ready() || !llmConfigured()) {
+    if (suggestionsKey) resetChatSuggestions();
     return;
   }
-  if (!chatMessages.length) {
-    chatMessagesEl.innerHTML =
-      '<p class="empty">还没有消息。划选一段「现场问 / 放进对话」，或在下面直接提问。</p>';
+  const context = {
+    doc_id: currentDocId(),
+    quote: selection?.quote?.slice(0, 2000) || "",
+    block_id: selection?.blockId || (currentViewMode === "markdown" ? collectPosition()?.block_id : "") || "",
+    page: currentViewMode === "pdf" ? pdfReadingPage : 0,
+  };
+  const key = JSON.stringify([context, currentVersionId, chatMessages.slice(-6)]);
+  if (key === suggestionsKey) return;
+  suggestionsKey = key;
+  suggestionsController?.abort();
+  suggestionsController = new AbortController();
+  const sequence = ++suggestionsSequence;
+  renderChatSuggestions();
+  chatSuggestionsEl.setAttribute("aria-busy", "true");
+  try {
+    const data = await api("/api/chat/suggestions", {
+      method: "POST", signal: suggestionsController.signal,
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(context),
+    });
+    if (sequence !== suggestionsSequence) return;
+    if (Array.isArray(data.suggestions) && data.suggestions.length === 3 &&
+        data.suggestions.every((q) => typeof q === "string" && q.trim())) {
+      renderChatSuggestions(data.suggestions, data.source);
+    }
+  } catch (error) {
+    // 默认问题始终可用，建议生成失败不打断阅读与对话。
+  } finally {
+    if (sequence === suggestionsSequence) chatSuggestionsEl.setAttribute("aria-busy", "false");
+  }
+}
+
+function renderChat() {
+  if (!currentDocId() || !chatMessages.length) {
+    chatMessagesEl.replaceChildren();
     updateTabBadges();
     return;
   }
@@ -1672,16 +1595,20 @@ async function loadChat(docId) {
   chatMessages = [];
   try {
     const data = await api(`/api/chat?doc_id=${encodeURIComponent(docId)}`);
+    if (docId !== currentDocId()) return;
     chatMessages = data.messages || [];
   } catch (e) {
+    if (docId !== currentDocId()) return;
     chatMessages = [];
   }
   renderChat();
+  scheduleChatSuggestions();
 }
 
 async function sendChat(question, quote) {
+  if (chatSending) return;
   if (!ready()) {
-    showToast("资料还没解析完成");
+    showToast(currentDocId() ? "资料还没解析完成" : "先打开一份资料，再提问");
     return;
   }
   if (!llmConfigured()) {
@@ -1693,24 +1620,32 @@ async function sendChat(question, quote) {
     showToast("先写一句问题，或在正文里划选一段");
     return;
   }
-  btnChatSend.disabled = true;
+  chatSending = true;
+  const sendingDocId = currentDocId();
+  ++suggestionsSequence;
+  suggestionsController?.abort();
+  chatSuggestionsEl.setAttribute("aria-busy", "false");
+  updateLlmStatus();
   chatMessagesEl.insertAdjacentHTML("beforeend", '<div class="loading chat-pending">思考中…</div>');
   try {
     const data = await postJson("/api/chat", {
-      doc_id: currentDocId(),
+      doc_id: sendingDocId,
       title: currentDoc ? currentDoc.title : undefined,
       question: q || "讲这段",
       quote: quote || undefined,
       block_id: quote ? (selection && selection.blockId) || undefined : undefined,
     });
+    if (sendingDocId !== currentDocId()) return;
     chatMessages = data.messages || [];
     renderChat();
     chatInput.value = "";
   } catch (e) {
     showToast(e.message, 5000);
   } finally {
+    chatSending = false;
     chatMessagesEl.querySelector(".chat-pending")?.remove();
     updateLlmStatus();
+    scheduleChatSuggestions();
   }
 }
 
@@ -1900,7 +1835,6 @@ async function rateCheck(level) {
 
 btnSpotAsk.addEventListener("click", spotAsk);
 btnThrowChat.addEventListener("click", throwToChat);
-btnHighlight.addEventListener("click", createHighlight);
 btnModeExplain.addEventListener("click", () => runSelectionAction("explain"));
 btnModeExample.addEventListener("click", () => runSelectionAction("example"));
 btnModePrereq.addEventListener("click", () => runSelectionAction("prereq"));
@@ -1960,7 +1894,7 @@ function updateNotesEnabled() {
     btnNotesExport.disabled = !hasDoc || !(notesContentEl.value || "").trim();
   }
   const ai = hasDoc && ready() && llmConfigured();
-  btnNotesDraft.disabled = !ai;
+  syncNotesSend();
   btnNotesRefreshSuggest.disabled = !ai;
 }
 
@@ -2051,6 +1985,8 @@ function exportNotes() {
 }
 
 async function loadNotes(docId) {
+  stopNotesDraft(false);
+  notesGenerationStatus.textContent = "";
   notesDocId = docId;
   notesDirty = false;
   notesSuggestions = [];
@@ -2100,8 +2036,7 @@ async function saveNotesNow() {
     setSaveState("is-ok", data.updated_at ? `已保存 · ${data.updated_at}` : "已保存");
     if (data.overview) {
       libraryState.overview = data.overview;
-      renderStats();
-      const doc = documents.find((d) => d.id === notesDocId);
+        const doc = documents.find((d) => d.id === notesDocId);
       if (doc) doc.has_note = content.trim() ? 1 : 0;
       renderLibrary();
     }
@@ -2191,29 +2126,109 @@ async function fetchSuggestions(showOk) {
   }
 }
 
+function syncNotesSend() {
+  const generating = !!notesDraftRequest;
+  btnNotesDraft.classList.toggle("is-generating", generating);
+  btnNotesDraft.setAttribute("aria-label", generating ? "停止生成" : "发送笔记请求");
+  btnNotesDraft.title = generating ? "停止生成" : "发送";
+  btnNotesDraft.disabled = !generating && (!notesDocId || !ready() || !llmConfigured());
+  btnNotesDraftApply.disabled = generating || !notesDraftText;
+  btnNotesDraftDiscard.disabled = generating;
+}
+
+function renderNotesDraft(text) {
+  notesDraftBody.classList.remove("is-streaming");
+  setMarkdownHtml(notesDraftBody, text);
+  attachCopyButtons(notesDraftBody);
+}
+
+function stopNotesDraft(showStatus = true) {
+  const request = notesDraftRequest;
+  if (!request) return;
+  notesDraftRequest = null;
+  request.controller.abort();
+  notesDraftText = request.text || request.previousText;
+  notesDraftWrap.hidden = !notesDraftText;
+  renderNotesDraft(notesDraftText);
+  notesDraftHeading.textContent = request.text ? "已停止，保留已生成内容" : "草稿预览，还没写进笔记";
+  notesGenerationStatus.textContent = showStatus ? "已停止生成" : "";
+  syncNotesSend();
+}
+
 async function requestDraft() {
-  if (!notesDocId || !llmConfigured()) return;
-  btnNotesDraft.disabled = true;
+  if (notesDraftRequest) { stopNotesDraft(); return; }
+  if (!notesDocId || !ready() || !llmConfigured()) return;
+  const request = {
+    controller: new AbortController(), docId: notesDocId,
+    text: "", previousText: notesDraftText,
+  };
+  notesDraftRequest = request;
+  notesDraftText = "";
   notesDraftWrap.hidden = false;
-  notesDraftBody.innerHTML = '<div class="loading">生成草稿中…</div>';
+  notesDraftHeading.textContent = "草稿预览，还没写进笔记";
+  notesDraftBody.replaceChildren();
+  notesDraftBody.classList.add("is-streaming");
+  notesGenerationStatus.textContent = "正在生成…";
+  syncNotesSend();
+  let reader = null;
+  let completed = false;
+  function receive(text) {
+    if (notesDraftRequest !== request || notesDocId !== request.docId) return;
+    request.text += text;
+    notesDraftBody.textContent = request.text;
+  }
   try {
-    const data = await postJson("/api/notes/draft", {
-      doc_id: notesDocId,
-      instruction: notesInstruction.value.trim() || undefined,
+    const response = await fetch("/api/notes/draft", {
+      method: "POST", signal: request.controller.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ doc_id: request.docId, instruction: notesInstruction.value.trim(), stream: true }),
     });
-    notesDraftText = data.draft || "";
-    setMarkdownHtml(notesDraftBody, notesDraftText || "（空草稿）");
-    attachCopyButtons(notesDraftBody);
-  } catch (e) {
-    notesDraftBody.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
-    showToast(e.message, 5000);
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `请求失败（HTTP ${response.status}）`);
+    }
+    if (!response.headers.get("content-type")?.includes("text/event-stream")) {
+      receive((await response.json()).draft || "");
+      completed = true;
+    } else {
+      reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      function parseLine(line) {
+        if (!line.startsWith("data:")) return;
+        const event = JSON.parse(line.slice(5).trim());
+        if (event.error) throw new Error(event.error);
+        if (typeof event.delta === "string") receive(event.delta);
+        if (event.done) completed = true;
+      }
+      while (!completed) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+        lines.forEach((line) => parseLine(line.trim()));
+        if (done) { if (buffer.trim()) parseLine(buffer.trim()); break; }
+      }
+      if (!completed) throw new Error("连接已中断，已保留收到的内容");
+    }
+    if (notesDraftRequest !== request || notesDocId !== request.docId) return;
+    notesDraftText = request.text.trim();
+    renderNotesDraft(notesDraftText || "（空草稿）");
+    notesGenerationStatus.textContent = notesDraftText ? "已生成，确认后写进笔记" : "没有生成内容，请调整要求后重试";
+  } catch (error) {
+    if (notesDraftRequest !== request || request.controller.signal.aborted) return;
+    notesDraftText = request.text || request.previousText;
+    notesDraftWrap.hidden = !notesDraftText;
+    renderNotesDraft(notesDraftText);
+    notesGenerationStatus.textContent = error.message || "生成失败，请重试";
   } finally {
-    updateNotesEnabled();
+    if (reader) { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+    if (notesDraftRequest === request) { notesDraftRequest = null; syncNotesSend(); }
   }
 }
 
 async function applyDraft() {
-  if (!notesDraftText) return;
+  if (notesDraftRequest || !notesDraftText) return;
   prepareNotesWrite();
   notesContentEl.value = notesDraftReplace.checked
     ? notesDraftText
@@ -2243,6 +2258,12 @@ btnNotesRefreshSuggest.addEventListener("click", () => {
   fetchSuggestions(true);
 });
 btnNotesDraft.addEventListener("click", requestDraft);
+notesInstruction.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && !event.isComposing) {
+    event.preventDefault();
+    if (!notesDraftRequest) requestDraft();
+  }
+});
 btnNotesDraftApply.addEventListener("click", applyDraft);
 btnNotesDraftDiscard.addEventListener("click", () => {
   notesDraftWrap.hidden = true;
@@ -2292,7 +2313,6 @@ async function rateExercise(level) {
     );
     markSelfRate(exerciseSelfRate, level);
     await refreshSessionQuiet();
-    renderStats();
     showToast(`已记录练习自评：${level}`);
   } catch (e) {
     showToast(e.message, 5000);
@@ -2427,103 +2447,6 @@ if (exerciseSelfRate) {
 }
 
 // ------------------------------------------------------------
-// 前置自评
-// ------------------------------------------------------------
-function showPrereqModal(data) {
-  return new Promise((resolve) => {
-    const questions = data.questions || [];
-    const answers = data.answers || {};
-    prereqFocus.textContent = data.focus ? `前置焦点：${data.focus}` : "";
-    prereqQuestions.innerHTML = "";
-    const empty = questions.length === 0;
-    prereqEmpty.hidden = !empty;
-    prereqQuestions.hidden = empty;
-    btnPrereqSubmit.textContent = empty ? "知道了" : "提交";
-
-    questions.forEach((q) => {
-      const options = q.options && q.options.length ? q.options : SKILL_LEVELS;
-      const wrap = document.createElement("div");
-      wrap.className = "prereq-q";
-      wrap.innerHTML = `
-        <p class="prereq-q-prompt">${escapeHtml(q.prompt || "")}</p>
-        <p class="prereq-q-why">${escapeHtml(q.why || "")}</p>
-        <div class="prereq-options">${options
-          .map(
-            (opt) =>
-              `<label class="prereq-opt${answers[q.id] === opt ? " selected" : ""}">
-                <input type="radio" name="prereq-${escapeHtml(q.id)}" value="${escapeHtml(opt)}"${
-                  answers[q.id] === opt ? " checked" : ""
-                }>${escapeHtml(opt)}</label>`
-          )
-          .join("")}</div>`;
-      wrap.querySelectorAll(".prereq-opt input").forEach((input) => {
-        input.addEventListener("change", () => {
-          wrap.querySelectorAll(".prereq-opt").forEach((el) => el.classList.remove("selected"));
-          input.closest(".prereq-opt").classList.add("selected");
-        });
-      });
-      prereqQuestions.appendChild(wrap);
-    });
-
-    prereqModal.hidden = false;
-    const cleanup = () => {
-      prereqModal.hidden = true;
-      btnPrereqSubmit.onclick = null;
-      btnPrereqSkip.onclick = null;
-    };
-    btnPrereqSkip.onclick = () => {
-      cleanup();
-      resolve(false);
-    };
-    btnPrereqSubmit.onclick = async () => {
-      const collected = {};
-      if (!empty) {
-        for (const q of questions) {
-          const input = prereqQuestions.querySelector(
-            `input[name="prereq-${CSS.escape(q.id)}"]:checked`
-          );
-          if (!input) return showToast(`请先回答：${q.prompt || q.id}`);
-          collected[q.id] = input.value;
-        }
-      }
-      btnPrereqSubmit.disabled = true;
-      try {
-        await postJson("/api/prereq/answer", { doc_id: currentDocId(), answers: collected });
-        cleanup();
-        resolve(true);
-      } catch (e) {
-        showToast(e.message, 5000);
-      } finally {
-        btnPrereqSubmit.disabled = false;
-      }
-    };
-  });
-}
-
-async function openPrereq() {
-  if (!ready()) return showToast("资料还没解析完成");
-  if (!llmConfigured()) {
-    showToast("前置自评是可选的 AI 功能；请先在 API 配置页填写 Key 并启用模型");
-    return;
-  }
-  btnPrereq.disabled = true;
-  try {
-    let data = await api(`/api/prereq?doc_id=${encodeURIComponent(currentDocId())}`);
-    if (!data.cached) {
-      showToast("正在生成前置自评…", 1800);
-      data = await postJson("/api/prereq", { doc_id: currentDocId() });
-    }
-    await showPrereqModal(data);
-  } catch (e) {
-    showToast(e.message, 5000);
-  } finally {
-    btnPrereq.disabled = !ready();
-  }
-}
-
-btnPrereq.addEventListener("click", openPrereq);
-
-// ------------------------------------------------------------
 // 确认 / 配置 / 重置
 // ------------------------------------------------------------
 function showConfirm(title, body) {
@@ -2559,7 +2482,7 @@ function renderTopbarAvatar(profile) {
     topbarAvatarImg.removeAttribute("src");
     topbarAvatarInitial.hidden = false;
   }
-  btnAvatar.title = name ? `${name} · 个人主页` : "个人主页";
+  btnAvatar.title = name ? `${name} · 设置` : "打开设置";
 }
 
 async function loadTopbarProfile() {
@@ -2573,8 +2496,9 @@ async function loadTopbarProfile() {
 
 function updateLlmStatus() {
   const canAI = ready() && llmConfigured();
-  btnChatSend.disabled = !canAI;
-  btnNotesDraft.disabled = !canAI || !notesDocId;
+  btnChatSend.disabled = !canAI || chatSending;
+  chatSuggestionsEl.querySelectorAll("button").forEach((button) => { button.disabled = chatSending; });
+  syncNotesSend();
   btnNotesRefreshSuggest.disabled = !canAI || !notesDocId;
   btnExercise.disabled = !canAI;
   btnSubmit.disabled = !canAI || !questionCache;
@@ -2588,13 +2512,8 @@ function updateTabBadges() {
     badgeChat.hidden = !chatMessages.length;
     badgeChat.textContent = String(chatMessages.length);
   }
-  if (badgeAnnotations) {
-    badgeAnnotations.hidden = !annotations.length;
-    badgeAnnotations.textContent = String(annotations.length);
-  }
   if (dotNotes) dotNotes.hidden = !(notesContentEl.value || "").trim();
   if (dotExercise) dotExercise.hidden = !questionCache;
-  if (dotReview) dotReview.hidden = !(lastSubmission && lastSubmission.review);
 }
 
 // ------------------------------------------------------------
@@ -2981,7 +2900,11 @@ function bindBlockClicks() {
 // ------------------------------------------------------------
 bindGutter(gutterLeft, railLeft, "left", "learning.railL", 220, 460);
 bindGutter(gutterRight, railRight, "right", "learning.railR", 300, 560);
-window.addEventListener("resize", moveTabInk);
+window.addEventListener("resize", () => {
+  moveTabInk();
+  syncChatToggle();
+  syncScrim();
+});
 window.addEventListener("storage", (event) => {
   if (
     event.key === "learning.readFontSize" ||
@@ -2990,8 +2913,35 @@ window.addEventListener("storage", (event) => {
     loadReadingSettings();
   }
 });
+window.addEventListener("learning:reading-settings", (event) => {
+  readFontSize = event.detail.fontSize;
+  readLineHeight = event.detail.lineHeight;
+  applyReadingSettings();
+});
+window.addEventListener("learning:profile", (event) => renderTopbarAvatar(event.detail));
+window.addEventListener("learning:api-config", async () => {
+  await refreshSessionQuiet();
+  resetChatSuggestions();
+  scheduleChatSuggestions();
+});
+window.addEventListener("learning:data-changed", (event) => {
+  if (event.detail && event.detail.reset) {
+    clearTimeout(notesSaveTimer);
+    clearTimeout(positionTimer);
+    clearTimeout(notesUndoTimer);
+    notesUndoStack = [];
+    ++docToken;
+    closeBubble();
+    pdfView.hidden = true;
+    docScroll.classList.remove("is-pdf");
+    clearPdfShell();
+    showEmpty();
+  }
+  loadPage();
+});
 document.addEventListener("DOMContentLoaded", () => {});
 switchTab("chat");
 moveTabInk();
 loadReadingSettings();
+renderChatSuggestions();
 loadPage();

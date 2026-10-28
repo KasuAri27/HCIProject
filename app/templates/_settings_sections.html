@@ -1,0 +1,87 @@
+<section class="settings-section workspace-section" hidden id="settings-reading" aria-labelledby="settings-reading-title">
+  <header class="settings-head">
+    <h2 id="settings-reading-title" tabindex="-1">阅读</h2>
+    <button type="button" class="text-btn" id="btn-reading-reset">恢复默认</button>
+  </header>
+  <div class="reading-settings-grid">
+    <div class="settings-controls">
+      <div class="setting-row">
+        <div>
+          <span class="setting-label">正文字号</span>
+          <p class="setting-help">只影响 Markdown 正文，不改变 PDF 播放页。</p>
+        </div>
+        <div class="font-stepper">
+          <button type="button" id="btn-font-dec" aria-label="减小字号">−</button>
+          <output id="font-size-value" for="font-size">17 px</output>
+          <button type="button" id="btn-font-inc" aria-label="增大字号">+</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <div>
+          <span class="setting-label">行距</span>
+          <p class="setting-help">中文长段落建议用“舒适”。</p>
+        </div>
+        <div class="segmented" id="line-height-group" role="group" aria-label="行距">
+          <button type="button" data-line="1.6">紧凑</button>
+          <button type="button" data-line="1.85">舒适</button>
+          <button type="button" data-line="2.1">宽松</button>
+        </div>
+      </div>
+      <p class="settings-note">修改会保存在本机，并同步到阅读台。</p>
+    </div>
+    <figure class="reading-preview" id="reading-preview">
+      <figcaption>纸面预览</figcaption>
+      <h3>注意力机制</h3>
+      <p>注意力机制按相关性对输入加权求和，输出是对重要部分的聚合。调整字号或行距，这段文字会同步变化。</p>
+      <p>查询向量决定关注点，权重经过归一化。</p>
+    </figure>
+  </div>
+</section>
+
+<section class="settings-section workspace-section" hidden id="settings-data" aria-labelledby="settings-data-title">
+  <header class="settings-head">
+    <h2 id="settings-data-title" tabindex="-1">学习数据</h2>
+    <span class="settings-note" id="data-summary"></span>
+  </header>
+  <div class="setting-row">
+    <div>
+      <span class="setting-label">重新扫描资料库</span>
+      <p class="setting-help">检查 library/ 里新增或改动的文件，并开始解析。</p>
+    </div>
+    <button type="button" class="pbtn" id="btn-rescan-library">重新扫描</button>
+  </div>
+  <div class="setting-row">
+    <div>
+      <span class="setting-label">清空学习记录</span>
+      <p class="setting-help">会清空已读、对话、笔记、标注、理解检查与练习记录；文档、原文件、播放 PDF 和 API 配置保留。</p>
+    </div>
+    <button type="button" class="pbtn pbtn-danger" id="btn-reset-learning">清空学习记录</button>
+  </div>
+</section>
+
+<section class="settings-section workspace-section" hidden id="settings-shortcuts" aria-labelledby="settings-shortcuts-title">
+  <header class="settings-head">
+    <h2 id="settings-shortcuts-title" tabindex="-1">快捷键</h2>
+  </header>
+  <dl class="shortcut-table">
+    <div><dt><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dt><dd>发送对话</dd></div>
+    <div><dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd></dt><dd>切换专注阅读</dd></div>
+    <div><dt><kbd>?</kbd></dt><dd>打开快捷键帮助（不在输入框内时）</dd></div>
+    <div><dt><kbd>Esc</kbd></dt><dd>关闭菜单、气泡或退出专注</dd></div>
+    <div><dt><kbd>←</kbd> / <kbd>→</kbd></dt><dd>切换批注标签（标签聚焦时）</dd></div>
+  </dl>
+</section>
+
+<section class="settings-section workspace-section" hidden id="settings-about" aria-labelledby="settings-about-title">
+  <header class="settings-head">
+    <h2 id="settings-about-title" tabindex="-1">关于</h2>
+  </header>
+  <p class="about-copy">
+    学习助手把资料、模型配置和学习记录都留在本机。AI 是可选能力，不配置也能阅读、标注和记笔记。
+  </p>
+  <div class="about-links">
+    <button type="button" class="text-btn" data-settings-section="user">读者档案</button>
+    <button type="button" class="text-btn" data-settings-section="api">API 配置</button>
+    <button type="button" class="text-btn" data-settings-close>回到阅读台</button>
+  </div>
+</section>

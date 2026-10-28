@@ -6,7 +6,9 @@
   <title>学习助手</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/katex/katex.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='settings-modal.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='pages.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='workspace-menu.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/pdfjs/web/pdf_viewer.css') }}">
 </head>
 <body>
 
@@ -18,13 +20,18 @@
     <span class="brand">学习助手</span>
     <span class="crumb" id="topbar-crumb" hidden></span>
     <span class="grow"></span>
-    <button type="button" id="btn-annot-toggle" class="icon-btn annot-toggle" title="显示或隐藏批注栏" aria-label="批注栏">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z"/></svg>批注
+    <button type="button" id="btn-chat-toggle" class="icon-btn pane-toggle" title="收起 AI 侧栏" aria-label="收起 AI 侧栏" aria-expanded="true" aria-controls="rail-right">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="4.5" width="17" height="15" rx="3"/>
+        <path d="M14.5 4.5v15"/>
+        <path class="pane-toggle-detail" d="M17.5 8v8"/>
+      </svg>
     </button>
-    <button type="button" id="btn-settings" class="btn" title="工作台设置">设置</button>
-    <button type="button" id="btn-avatar" class="topbar-avatar" title="个人主页" aria-label="个人主页">
-      <img id="topbar-avatar-img" alt="" hidden>
-      <span id="topbar-avatar-initial" aria-hidden="true">读</span>
+    <button type="button" id="btn-avatar" class="profile-trigger" title="打开设置" aria-label="打开设置" aria-haspopup="dialog" aria-controls="workspace-settings" aria-expanded="false">
+      <span class="topbar-avatar">
+        <img id="topbar-avatar-img" alt="" hidden>
+        <span id="topbar-avatar-initial" aria-hidden="true">读</span>
+      </span>
     </button>
   </header>
 
@@ -52,36 +59,26 @@
       <div class="rail-body" id="library-tree">
         <p class="empty">正在扫描资料库…</p>
       </div>
-      <div class="rail-foot">
-        <div class="foot-row"><span>已读</span><span id="read-ratio">0 / 0</span></div>
-        <div class="foot-bar"><i id="read-bar"></i></div>
-        <div class="foot-row foot-muted"><span>笔记</span><span id="note-count">0</span></div>
-        <div class="foot-row foot-muted"><span>做过题</span><span id="exercise-count">0</span></div>
-        <div class="foot-row foot-muted"><span>理解自评</span><span id="understanding-count">0</span></div>
-        <div class="foot-row foot-muted"><span>练习记录</span><span id="practice-count">0</span></div>
-      </div>
     </aside>
 
     <div class="gutter" id="gutter-left" role="separator" aria-orientation="vertical" tabindex="0" title="拖动调整资料柜宽度"></div>
 
     <!-- 中栏：纸面 -->
     <main class="reading" id="reading">
-      <div class="doc-head" id="doc-head" hidden>
-        <div class="doc-head-main">
-          <h1 class="doc-title" id="doc-title"></h1>
-        </div>
-        <div class="doc-head-side">
-          <button type="button" id="btn-prereq" class="btn btn-small" disabled
-            title="可选：让 AI 根据这份资料出几道阅读前的基础自评">前置自评</button>
-        </div>
-        <div class="doc-progress" aria-hidden="true"><i id="doc-progress-bar"></i></div>
-      </div>
       <div class="version-note" id="doc-version-note" hidden></div>
 
       <div class="doc-scroll" id="doc-scroll">
         <div class="doc-empty" id="doc-empty"></div>
         <div class="pdf-view" id="pdf-view" hidden>
-          <iframe id="pdf-frame" title="PDF 播放"></iframe>
+          <div class="pdf-shell">
+            <div class="pdf-stage">
+              <div class="pdf-viewer-container" id="pdf-viewer-container" tabindex="0" role="region" aria-label="PDF 阅读区" aria-description="左键放大，右键缩小；也可用加号、减号缩放，数字 0 恢复适应宽度">
+                <div class="pdfViewer" id="pdf-viewer"></div>
+              </div>
+              <output class="pdf-page-indicator" id="pdf-page-status" aria-label="当前页码" hidden>1 / 1</output>
+              <div class="pdf-loading" id="pdf-loading" hidden>正在加载 PDF…</div>
+            </div>
+          </div>
         </div>
         <article class="doc-page" id="doc-page" hidden>
           <div class="doc-body markdown" id="doc-body"></div>
@@ -112,7 +109,6 @@
           <button type="button" id="btn-spot-ask" class="btn btn-small btn-primary">现场问</button>
           <button type="button" id="btn-throw-chat" class="btn btn-small">放进对话</button>
           <button type="button" id="btn-quote-note" class="btn btn-small btn-quiet">记进笔记</button>
-          <button type="button" id="btn-highlight" class="btn btn-small btn-quiet">高亮</button>
         </div>
         <div class="bubble-answer markdown" id="select-bubble-answer" hidden></div>
         <div class="check-box" id="check-answer-wrap" hidden>
@@ -130,31 +126,17 @@
 
       <div class="tabs" role="tablist" aria-label="批注">
         <button type="button" role="tab" id="tab-chat" class="tab is-active" data-pane="pane-chat" aria-selected="true" aria-controls="pane-chat">对话<span class="tab-badge" id="badge-chat" hidden></span></button>
-        <button type="button" role="tab" id="tab-annotations" class="tab" data-pane="pane-annotations" aria-selected="false" aria-controls="pane-annotations">标注<span class="tab-badge" id="badge-annotations" hidden></span></button>
         <button type="button" role="tab" id="tab-notes" class="tab" data-pane="pane-notes" aria-selected="false" aria-controls="pane-notes">笔记<span class="tab-dot" id="dot-notes" hidden></span></button>
         <button type="button" role="tab" id="tab-exercise" class="tab" data-pane="pane-exercise" aria-selected="false" aria-controls="pane-exercise">练习<span class="tab-dot" id="dot-exercise" hidden></span></button>
-        <button type="button" role="tab" id="tab-review" class="tab" data-pane="pane-review" aria-selected="false" aria-controls="pane-review">复盘<span class="tab-dot" id="dot-review" hidden></span></button>
         <span class="tab-ink" id="tab-ink" aria-hidden="true"></span>
       </div>
 
-      <!-- 标注 -->
-      <section class="pane" id="pane-annotations" role="tabpanel" aria-labelledby="tab-annotations" hidden>
-        <div class="pane-bar">
-          <span class="field-label" style="margin:0">高亮与批注</span>
-          <span class="annot-count" id="annot-count"></span>
-        </div>
-        <div class="pane-scroll" id="annotations-list">
-          <p class="empty">在正文里选中一段文字，点「高亮」，这里会出现标注。</p>
-        </div>
-      </section>
-
       <!-- 对话 -->
       <section class="pane is-active" id="pane-chat" role="tabpanel" aria-labelledby="tab-chat">
-        <div class="pane-scroll" id="chat-messages">
-          <p class="empty">打开一份资料后，这里可以就它提问。</p>
-        </div>
+        <div class="pane-scroll" id="chat-messages"></div>
+        <div class="chat-suggestions" id="chat-suggestions" role="group" aria-label="建议提问"></div>
         <div class="composer">
-          <textarea id="chat-input" rows="2" spellcheck="false" placeholder="就这份资料提问，可以不划段"></textarea>
+          <textarea id="chat-input" rows="2" spellcheck="false" placeholder="有疑惑？" aria-label="有疑惑？"></textarea>
           <button type="button" id="btn-chat-send" class="btn btn-primary" disabled>发送</button>
         </div>
       </section>
@@ -176,14 +158,20 @@
               placeholder="你的笔记。AI 不会自动改这里。"></textarea>
 
             <div class="notes-ai">
-              <label class="field-label" for="notes-instruction">让 AI 帮写点什么（可选）</label>
-              <textarea id="notes-instruction" rows="2" spellcheck="false"
-                placeholder="例如：把划选整理成三条要点"></textarea>
-              <button type="button" id="btn-notes-draft" class="btn btn-small" disabled>生成草稿</button>
+              <label class="field-label" for="notes-instruction">让 AI 帮写点什么</label>
+              <div class="notes-composer" id="notes-composer">
+                <textarea id="notes-instruction" rows="2" spellcheck="false"
+                  placeholder="例如：把划选整理成三条要点"></textarea>
+                <button type="button" id="btn-notes-draft" class="notes-send" aria-label="发送笔记请求" title="发送" disabled>
+                  <svg class="notes-send-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 15V5m-4 4 4-4 4 4"/></svg>
+                  <svg class="notes-stop-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="5.5" y="5.5" width="9" height="9" rx="1"/></svg>
+                </button>
+              </div>
+              <span class="notes-generation-status" id="notes-generation-status" role="status" aria-live="polite"></span>
             </div>
 
             <div class="draft" id="notes-draft-wrap" hidden>
-              <p class="draft-head">草稿预览，还没写进笔记</p>
+              <p class="draft-head" id="notes-draft-heading">草稿预览，还没写进笔记</p>
               <div class="draft-body markdown" id="notes-draft-body"></div>
               <label class="draft-replace">
                 <input type="checkbox" id="notes-draft-replace"> 替换全文（不勾就追加到末尾）
@@ -239,17 +227,44 @@
             <span class="hint" id="exercise-evidence-status"></span>
           </div>
           <button type="button" id="btn-exercise-next" class="btn btn-small" hidden>再来一题</button>
-        </div>
-      </section>
-
-      <!-- 复盘 -->
-      <section class="pane" id="pane-review" role="tabpanel" aria-labelledby="tab-review" hidden>
-        <div class="pane-scroll markdown" id="last-review">
-          <p class="empty">提交解答后，这里显示你的解答和 AI 批改。</p>
+          <div class="review-history">
+            <h3 class="field-label">上次批改</h3>
+            <div class="markdown" id="last-review">
+              <p class="empty">提交解答后，这里显示你的解答和 AI 批改。</p>
+            </div>
+          </div>
         </div>
       </section>
     </aside>
   </div>
+
+  <dialog class="workspace-settings" id="workspace-settings" aria-labelledby="workspace-settings-title">
+    <header class="workspace-settings-head">
+      <h2 id="workspace-settings-title">工作台设置</h2>
+      <button type="button" class="icon-btn" id="btn-settings-close" aria-label="关闭设置"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button>
+    </header>
+    <div class="workspace-settings-body">
+      <nav class="workspace-settings-nav" aria-label="设置板块">
+        <button type="button" data-settings-section="user" aria-pressed="true">个人</button>
+        <button type="button" data-settings-section="api" aria-pressed="false">API 配置</button>
+        <button type="button" data-settings-section="reading" aria-pressed="false">阅读</button>
+        <button type="button" data-settings-section="data" aria-pressed="false">学习数据</button>
+        <button type="button" data-settings-section="shortcuts" aria-pressed="false">快捷键</button>
+        <button type="button" data-settings-section="about" aria-pressed="false">关于</button>
+      </nav>
+      <div class="workspace-settings-content">
+        <section class="workspace-section" id="settings-user" aria-labelledby="settings-user-title">
+          <header class="settings-head"><h2 id="settings-user-title" tabindex="-1">读者档案</h2></header>
+          {% include "user.html" %}
+        </section>
+        <section class="workspace-section" id="settings-api" aria-labelledby="settings-api-title" hidden>
+          {% include "api_config.html" %}
+        </section>
+        {% include "_settings_sections.html" %}
+      </div>
+    </div>
+    <div class="page-toast" id="page-toast" role="status" hidden></div>
+  </dialog>
 
   <!-- 通用确认 -->
   <div class="modal-mask" id="confirm-modal" hidden>
@@ -265,24 +280,6 @@
 
   <!-- API 设置 -->
 
-
-  <!-- 前置自评 -->
-  <div class="modal-mask" id="prereq-modal" hidden>
-    <div class="modal modal-tall" role="dialog" aria-modal="true" aria-labelledby="prereq-title">
-      <h3 id="prereq-title">阅读前的基础自评</h3>
-      <p class="prereq-focus" id="prereq-focus"></p>
-      <p class="modal-lead">这一步是可选的，跳过不影响阅读。</p>
-      <div class="prereq-list" id="prereq-questions"></div>
-      <div class="prereq-none" id="prereq-empty" hidden>
-        <p>这份资料不需要补前置，直接读就行。</p>
-      </div>
-      <div class="modal-actions">
-        <button type="button" id="btn-prereq-skip" class="btn btn-quiet">跳过</button>
-        <span class="grow"></span>
-        <button type="button" id="btn-prereq-submit" class="btn btn-primary">提交</button>
-      </div>
-    </div>
-  </div>
 
   <div class="modal-mask" id="help-modal" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title">
@@ -300,13 +297,15 @@
     </div>
   </div>
 
-  {% include "_settings_modal.html" %}
-
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="{{ url_for('static', filename='vendor/katex/katex.min.js') }}"></script>
   <script src="{{ url_for('static', filename='vendor/katex/auto-render.min.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
-  <script src="{{ url_for('static', filename='settings-modal.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-common.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-user.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-api.js') }}"></script>
+  <script src="{{ url_for('static', filename='workspace-menu.js') }}"></script>
 </body>
 </html>

@@ -65,9 +65,12 @@ class ProfileAvatarTests(BaseTest):
 
 
 class HomeHeaderTests(BaseTest):
-    def test_home_keeps_settings_and_avatar_only(self):
+    def test_home_groups_settings_under_avatar(self):
         html = self.client.get("/").get_data(as_text=True)
-        self.assertIn('id="btn-settings"', html)
+        self.assertNotIn('id="btn-settings"', html)
+        self.assertNotIn('id="profile-menu"', html)
+        self.assertIn('aria-haspopup="dialog"', html)
+        self.assertIn('id="workspace-settings"', html)
         self.assertIn('id="btn-avatar"', html)
         self.assertIn('id="topbar-avatar-initial"', html)
         for old in (
@@ -87,23 +90,25 @@ class HomeHeaderTests(BaseTest):
         ):
             self.assertNotIn(f'id="{old}"', html)
         self.assertIn('id="import-input"', html)
-        self.assertIn('id="btn-prereq"', html)
+        self.assertIn('id="pdf-viewer-container"', html)
 
 
 class UserPageTests(BaseTest):
-    def test_user_page_redirects_to_modal_panel(self):
-        response = self.client.get("/user")
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/?panel=user", response.headers["Location"])
-        html = self.client.get("/").get_data(as_text=True)
-        for element_id in (
-            "settings-modal",
-            "settings-tab-user",
-            "modal-profile-form",
-            "modal-avatar-input",
-            "modal-avatar-remove",
-        ):
-            self.assertIn(f'id="{element_id}"', html, element_id)
+    def test_user_legacy_address_opens_profile_inside_shared_dialog(self):
+        redirect = self.client.get("/user")
+        self.assertEqual(redirect.status_code, 302)
+        self.assertEqual(redirect.location, "/?panel=user")
+        response = self.client.get("/user", follow_redirects=True)
+        self.assertEqual(response.status_code, 200)
+        html = response.get_data(as_text=True)
+        self.assertIn("读者档案", html)
+        self.assertIn('id="profile-form"', html)
+        self.assertIn('id="settings-user"', html)
+        self.assertIn('id="avatar-input"', html)
+        self.assertIn('id="btn-avatar-remove"', html)
+        self.assertNotIn("API 服务", html)
+        self.assertNotIn('id="service-list"', html)
+        self.assertIn('id="custom-form"', html)
 
 
 if __name__ == "__main__":

@@ -269,19 +269,13 @@ class ReadLevelTests(AiBaseTest):
 
 class FrontendPhase3Tests(unittest.TestCase):
     def test_phase3_dom_ids_exist(self):
-        templates = Path(config.APP_DIR) / "app" / "templates"
-        html = (templates / "index.html").read_text(encoding="utf-8") + (
-            templates / "_settings_modal.html"
-        ).read_text(encoding="utf-8")
+        html = (Path(config.APP_DIR) / "app" / "templates" / "index.html").read_text(encoding="utf-8")
         for element_id in (
-            "btn-settings",
+            "workspace-settings",
             "btn-avatar",
+            "btn-chat-toggle",
             "topbar-avatar-img",
             "topbar-avatar-initial",
-            "settings-modal",
-            "settings-tab-settings",
-            "modal-profile-form",
-            "modal-provider-list",
             "help-modal",
             "btn-help-close",
             "btn-mode-explain",
@@ -296,8 +290,7 @@ class FrontendPhase3Tests(unittest.TestCase):
             "btn-notes-export",
             "exercise-self-rate",
             "exercise-evidence-status",
-            "understanding-count",
-            "practice-count",
+            "last-review",
         ):
             self.assertIn(f'id="{element_id}"', html, element_id)
 

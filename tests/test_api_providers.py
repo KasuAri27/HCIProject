@@ -171,19 +171,16 @@ class ProviderTests(BaseTest):
 
 
 class ProviderPageTests(BaseTest):
-    def test_pages_redirect_to_settings_modal(self):
-        for path, panel in (("/api-config", "api"), ("/user", "user"), ("/settings", "settings")):
-            response = self.client.get(path)
-            self.assertEqual(response.status_code, 302)
-            self.assertIn(f"/?panel={panel}", response.headers["Location"])
-        html = self.client.get("/").get_data(as_text=True)
-        for element_id in (
-            "settings-modal",
-            "settings-tab-api",
-            "modal-provider-list",
-            "modal-model-list",
-        ):
-            self.assertIn(f'id="{element_id}"', html, element_id)
+    def test_pages_render(self):
+        api_page = self.client.get("/api-config", follow_redirects=True)
+        self.assertEqual(api_page.status_code, 200)
+        html = api_page.get_data(as_text=True)
+        self.assertIn('id="settings-api"', html)
+        self.assertIn("id=\"provider-list\"", html)
+        self.assertIn("id=\"model-list\"", html)
+        self.assertEqual(self.client.get("/user").location, "/?panel=user")
+        self.assertEqual(self.client.get("/settings").location, "/?panel=reading")
+        self.assertEqual(self.client.get("/api-config?provider=qwen").location, "/?panel=api&provider=qwen")
 
     def test_default_state_is_not_configured(self):
         # 确保测试不依赖本机真实 db/api_config.json

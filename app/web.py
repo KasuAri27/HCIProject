@@ -7,24 +7,17 @@
 
 import base64
 import json
+import mimetypes
 import threading
 from io import BytesIO
 from pathlib import Path
 
-from flask import (
-    Flask,
-    abort,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    send_file,
-    send_from_directory,
-)
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_file, send_from_directory, url_for
 
 from . import (
     api_config,
     chapter_chat,
+    chat_suggestions,
     config,
     explainer,
     imports,
@@ -40,6 +33,7 @@ from . import (
     tutor,
 )
 
+mimetypes.add_type("text/javascript", ".mjs")
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = config.MAX_UPLOAD_MB * 1024 * 1024
 
@@ -74,17 +68,17 @@ def index():
 
 @app.route("/user")
 def page_user():
-    return redirect("/?panel=user")
+    return redirect(url_for("index", panel="user"))
 
 
 @app.route("/api-config")
 def page_api_config():
-    return redirect("/?panel=api")
+    return redirect(url_for("index", panel="api", provider=request.args.get("provider") or None))
 
 
 @app.route("/settings")
 def page_settings():
-    return redirect("/?panel=settings")
+    return redirect(url_for("index", panel="reading"))
 
 
 @app.route("/library-assets/<path:filename>")
@@ -588,6 +582,26 @@ def api_chat_spot():
     return jsonify(result)
 
 
+@app.route("/api/chat/suggestions", methods=["POST"])
+def api_chat_suggestions():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "请求体必须是 JSON 对象"}), 400
+    for key in ("doc_id", "quote", "block_id"):
+        if not isinstance(data.get(key, ""), str):
+            return jsonify({"error": f"{key} 必须是字符串"}), 400
+    page = data.get("page", 0)
+    if type(page) is not int or not 0 <= page <= 1_000_000:
+        return jsonify({"error": "page 必须是非负整数"}), 400
+    try:
+        return jsonify(chat_suggestions.suggest(
+            data.get("doc_id", "").strip(), data.get("quote", "")[:2000],
+            data.get("block_id", "").strip(), page,
+        ))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
 @app.route("/api/notes", methods=["GET"])
 def api_notes_get():
     doc_id = (request.args.get("doc_id") or "").strip()
@@ -628,6 +642,19 @@ def api_notes_draft():
     parsed, err = notes.parse_draft_body(request.get_json(silent=True))
     if err:
         return jsonify({"error": err}), 400
+    if request.get_json().get("stream") is True:
+        def generate():
+            chunks = notes.draft_stream(parsed["doc_id"], parsed.get("instruction") or "", parsed.get("quote") or "")
+            try:
+                yield 'data: {"started":true}\n\n'
+                for text in chunks:
+                    yield f"data: {json.dumps({'delta': text}, ensure_ascii=False)}\n\n"
+                yield 'data: {"done":true}\n\n'
+            except (ValueError, llm.LLMError) as exc:
+                yield f"data: {json.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+            finally:
+                chunks.close()
+        return Response(generate(), mimetype="text/event-stream", headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
     try:
         result = notes.draft(
             parsed["doc_id"],
