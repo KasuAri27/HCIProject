@@ -43,6 +43,7 @@ Windows 也可以双击 `launcher/start.bat`；需要原生桌面窗口时运行
 
 - **提交前先阅读提交标准**：[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)。分支命名、提交词格式、提交前检查都以它为准；推送和 PR 会跑 CI，不合规会拦下。
 - **当前任务和限制看 TODO**：[docs/TODO.md](docs/TODO.md)。
+- **界面约定**：点击头像打开统一设置弹窗；个人档案、API 配置和所有非主页面都放在弹窗中，后续开发继续遵守。
 - 本地数据和密钥不提交：`db/learning.db`、`db/originals/`、`db/backups/`、`db/api_config.json` 以及 `library/` 中的用户资料。
 - 不配置 API 也能阅读、标注、记笔记和恢复位置；AI 只是可选增强。
 - DOCX/PPTX 转 PDF 依赖 Windows 与本机 Microsoft Office（Word/PowerPoint）；PDF 播放模式暂不记录滚动位置，也不能划选标注。
