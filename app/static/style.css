@@ -1116,6 +1116,9 @@ body.is-resizing {
 }
 
 /* 笔记 */
+#notes-layout {
+  padding: 16px 18px 24px;
+}
 .notes-area {
   min-height: 220px;
   font-size: 14px;
@@ -1134,8 +1137,56 @@ body.is-resizing {
   font-weight: 600;
   color: var(--ink-2);
 }
-.notes-ai textarea {
-  margin-bottom: 8px;
+.notes-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px;
+  background: var(--page);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+}
+.notes-composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 110, 124, 0.1);
+}
+.notes-composer textarea {
+  min-width: 0;
+  flex: 1;
+  min-height: 56px;
+  max-height: 180px;
+  margin: 0;
+  padding: 2px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  resize: vertical;
+}
+.notes-composer textarea:focus { outline: none; box-shadow: none; }
+.notes-send {
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--page);
+  background: var(--accent);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.notes-send:hover:not(:disabled) { background: var(--accent-2); }
+.notes-send:disabled { opacity: 0.4; cursor: not-allowed; }
+.notes-send svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; fill: none; }
+.notes-send .notes-stop-icon { display: none; fill: currentColor; stroke: none; }
+.notes-send.is-generating .notes-send-icon { display: none; }
+.notes-send.is-generating .notes-stop-icon { display: block; }
+.notes-send:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.notes-generation-status { display: block; margin-top: 7px; font-size: 12px; line-height: 1.6; color: var(--ink-2); }
+.notes-generation-status:empty { display: none; }
+@media (max-width: 620px) {
+  #notes-layout { padding: 14px 16px 22px; }
 }
 .draft {
   margin-top: 14px;
@@ -1156,6 +1207,7 @@ body.is-resizing {
   padding-right: 4px;
   overflow-y: auto;
 }
+.draft-body.is-streaming { white-space: pre-wrap; }
 .draft-replace {
   display: flex;
   align-items: center;
@@ -2202,7 +2254,6 @@ body.focus-mode .workbench {
   place-items: center;
   width: 32px;
   height: 32px;
-  padding: 0;
   flex-shrink: 0;
   overflow: hidden;
   font-family: var(--font-doc);
@@ -2212,7 +2263,6 @@ body.focus-mode .workbench {
   background: var(--accent-wash);
   border: 1px solid rgba(15, 110, 124, 0.22);
   border-radius: 50%;
-  cursor: pointer;
 }
 .topbar-avatar:hover {
   border-color: var(--accent);
@@ -2303,3 +2353,183 @@ body.focus-mode .workbench {
   flex: 1;
   min-height: 240px;
 }
+
+/* ---------- 可收纳侧栏 ---------- */
+.workbench {
+  grid-template-columns: 0 0 minmax(0, 1fr) var(--gutter) var(--rail-r);
+}
+.rail-left {
+  position: fixed;
+  top: var(--topbar-h);
+  bottom: 0;
+  left: 0;
+  z-index: 60;
+  width: min(320px, 86vw);
+  background: var(--panel);
+  border-right: 1px solid var(--rule);
+  box-shadow: var(--shadow-pop);
+  transform: translateX(-102%);
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+body.rail-left-open .rail-left {
+  transform: none;
+}
+#gutter-left {
+  display: none;
+}
+body.rail-right-closed .workbench {
+  grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
+}
+body.rail-right-closed .rail-right,
+body.rail-right-closed #gutter-right {
+  display: none;
+}
+.chat-toggle.is-active {
+  color: var(--accent-2);
+  background: var(--accent-wash);
+}
+.review-history {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--rule-soft);
+}
+.review-history .field-label {
+  margin-bottom: 8px;
+}
+@media (max-width: 900px) {
+  .workbench {
+    grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
+  }
+}
+
+/* ---------- PDF.js 自绘阅读器 ---------- */
+.pdf-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--desk);
+}
+.pdf-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.pdf-viewer-container {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background: #2f343a;
+}
+.pdf-viewer-container .pdfViewer {
+  position: relative;
+  min-height: 100%;
+}
+.pdf-page-indicator {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  z-index: 5;
+  transform: translateX(-50%);
+  padding: 7px 14px;
+  font: 12px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: rgba(27, 37, 48, 0.84);
+  border-radius: 20px;
+  pointer-events: none;
+}
+.chat-suggestions {
+  display: grid;
+  gap: 3px;
+  flex-shrink: 0;
+  padding: 8px 12px 12px;
+}
+.chat-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  font: 12.5px/1.6 var(--font-ui);
+  color: var(--ink-2);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.chat-suggestion:hover:not(:disabled) { color: var(--accent-2); background: var(--accent-wash); }
+.chat-suggestion:disabled { opacity: 0.5; cursor: wait; }
+.chat-suggestion svg { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.chat-suggestion:focus-visible, .pdf-viewer-container:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pdf-stage .pdfViewer .page {
+  margin: 14px auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
+}
+.pdf-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--page);
+  background: rgba(27, 37, 48, 0.72);
+}
+
+.pdf-error {
+  max-width: 36rem;
+  margin: 18vh auto 0;
+  padding: 14px 18px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--page);
+  text-align: center;
+}
+
+/* 右侧栏开关：图标按钮 */
+.pane-toggle {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  gap: 0;
+  color: var(--ink);
+  background: #f1f3f5;
+  border: 0;
+  border-radius: 8px;
+}
+.pane-toggle:hover {
+  color: var(--ink);
+  background: #e6ebef;
+}
+.pane-toggle.is-active {
+  color: var(--ink);
+  background: #f1f3f5;
+}
+.pane-toggle svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.8;
+}
+
+/* 顶栏操作：状态只落在侧栏开关上，个人入口保持安静。 */
+.topbar .pane-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  color: var(--ink-2);
+  background: transparent;
+  border-radius: 7px;
+}
+.topbar .pane-toggle:hover { background: var(--panel-2); }
+.topbar .pane-toggle.is-active { color: var(--accent); background: var(--accent-wash); }
+.topbar .pane-toggle svg { width: 21px; height: 21px; stroke-width: 1.6; }
+.pane-toggle-detail { opacity: 0; }
+.pane-toggle.is-active .pane-toggle-detail { opacity: 0.55; }

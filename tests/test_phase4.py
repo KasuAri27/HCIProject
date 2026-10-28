@@ -280,10 +280,17 @@ class FrontendPhase4Tests(unittest.TestCase):
             "btn-ask-cross",
             "doc-version-note",
             "pdf-view",
-            "pdf-frame",
+            "pdf-viewer-container",
+            "pdf-viewer",
+            "pdf-page-status",
+            "chat-suggestions",
         ):
             self.assertIn(f'id="{element_id}"', html, element_id)
         self.assertIn(".pptx", html)
+        vendor = Path(config.APP_DIR) / "app" / "static" / "vendor" / "pdfjs"
+        self.assertTrue((vendor / "runtime" / "pdf.min.mjs").is_file())
+        self.assertTrue((vendor / "runtime" / "pdf.worker.min.mjs").is_file())
+        self.assertTrue((vendor / "web" / "pdf_viewer.mjs").is_file())
 
 
 if __name__ == "__main__":

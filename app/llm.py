@@ -15,6 +15,48 @@ class LLMError(Exception):
     """LLM API 调用失败时抛出的异常。"""
 
 
+def chat_stream(messages: list, api_base: str, api_key: str, model: str,
+                timeout: float = 60.0, temperature: float = 0.7):
+    """读取兼容接口的 SSE 文本增量；关闭生成器时关闭上游响应。"""
+    if not api_key:
+        raise LLMError("未配置 API Key，请先在设置中配置接口")
+    request = urllib.request.Request(
+        api_base.rstrip("/") + "/chat/completions",
+        data=json.dumps({"model": model, "messages": messages, "temperature": temperature,
+                         "stream": True}).encode("utf-8"),
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json",
+                 "Accept": "text/event-stream"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            for line in response:
+                line = line.decode("utf-8").strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    return
+                try:
+                    event = json.loads(data)
+                    if event.get("error"):
+                        raise LLMError("模型服务返回生成错误")
+                    choices = event.get("choices") or []
+                    text = choices[0].get("delta", {}).get("content") if choices else None
+                except (ValueError, AttributeError, TypeError, IndexError) as exc:
+                    raise LLMError("模型流式响应格式异常") from exc
+                if isinstance(text, str) and text:
+                    yield text
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:500]
+        raise LLMError(f"LLM API 返回 HTTP {exc.code}: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise LLMError(f"LLM API 网络错误: {exc.reason}") from exc
+    except TimeoutError as exc:
+        raise LLMError(f"LLM API 请求超时（{timeout} 秒）") from exc
+    except OSError as exc:
+        raise LLMError("模型连接已中断，请重试") from exc
+
+
 def parse_json(text: str) -> Any:
     """解析模型返回的 JSON，容忍 ```json 围栏。"""
     raw = (text or "").strip()

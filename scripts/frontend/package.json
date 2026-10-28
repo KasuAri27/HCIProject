@@ -1,0 +1,9 @@
+{
+  "name": "hciproject-frontend-checks",
+  "private": true,
+  "version": "1.0.0",
+  "devDependencies": {
+    "eslint": "10.13.0",
+    "globals": "16.5.0"
+  }
+}

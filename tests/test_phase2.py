@@ -314,6 +314,37 @@ class ReadingTests(BaseTest):
         self.assertEqual(deleted.status_code, 200)
         self.assertEqual(self.client.get(f"/api/documents/{self.doc_id}").get_json()["annotations"], [])
 
+    def test_annotation_rejects_unsafe_color(self):
+        block = self.doc_content(self.doc_id)["blocks"][1]
+        payload = {
+            "block_id": block["id"],
+            "start_offset": 0,
+            "end_offset": 3,
+            "quote": "第一段",
+            "color": 'amber"><img src=x onerror=alert(1)>',
+        }
+        created = self.client.post(
+            f"/api/documents/{self.doc_id}/annotations", json=payload
+        )
+        self.assertEqual(created.status_code, 400)
+
+        created = self.client.post(
+            f"/api/documents/{self.doc_id}/annotations",
+            json={**payload, "color": "amber"},
+        )
+        annotation_id = created.get_json()["annotation"]["id"]
+        patched = self.client.patch(
+            f"/api/annotations/{annotation_id}", json={"color": payload["color"]}
+        )
+        self.assertEqual(patched.status_code, 400)
+        with store._conn() as conn:
+            conn.execute(
+                "UPDATE annotations SET color = ? WHERE id = ?",
+                (payload["color"], annotation_id),
+            )
+        stored = self.client.get(f"/api/documents/{self.doc_id}").get_json()["annotations"][0]
+        self.assertEqual(stored["color"], "amber")
+
     def test_original_file_is_served(self):
         response = self.client.get(f"/api/documents/{self.doc_id}/original")
         self.assertEqual(response.status_code, 200)
@@ -387,9 +418,9 @@ class FrontendContractTests(unittest.TestCase):
         refs = set(re.findall(r'\$\("([^"]+)"\)', js))
         dynamic = {"btn-empty-import", "btn-empty-scan", "btn-status-retry"}
         self.assertEqual(refs - ids - dynamic, set())
-        self.assertIn('id="btn-prereq"', html)
-        self.assertNotIn('id="doc-call"', html)
-        self.assertNotIn("下载原文件", html)
+        self.assertNotIn('id="doc-head"', html)
+        self.assertNotIn('id="btn-prereq"', html)
+        self.assertIn('id="pdf-viewer-container"', html)
 
 
 if __name__ == "__main__":
@@ -482,3 +513,76 @@ class AIAndConfigTests(BaseTest):
             prereq = self.client.post("/api/prereq", json={"doc_id": self.doc_id})
         self.assertEqual(prereq.status_code, 200)
         self.assertEqual(len(prereq.get_json()["questions"]), 1)
+
+
+class APIConfigSecurityTests(BaseTest):
+    def test_provider_endpoint_change_requires_key_confirmation(self):
+        original = api_config.DEFAULT_CONFIG["api_base"]
+        created = self.client.post(
+            "/api/providers",
+            json={"id": "deepseek", "api_base": original, "api_key": "sk-original"},
+        )
+        self.assertEqual(created.status_code, 200)
+
+        changed = self.client.post(
+            "/api/providers",
+            json={"id": "deepseek", "api_base": "https://other.example.com/v1"},
+        )
+        self.assertEqual(changed.status_code, 400)
+        provider = api_config.active_provider()
+        self.assertEqual(provider["api_base"], original)
+        self.assertEqual(provider["api_key"], "sk-original")
+
+        confirmed = self.client.post(
+            "/api/providers",
+            json={
+                "id": "deepseek",
+                "api_base": "https://other.example.com/v1",
+                "api_key": "sk-replacement",
+            },
+        )
+        self.assertEqual(confirmed.status_code, 200)
+        self.assertNotIn("sk-replacement", confirmed.get_data(as_text=True))
+
+    def test_legacy_endpoint_change_requires_key_confirmation(self):
+        payload = {
+            "api_base": "https://api.example.com",
+            "api_key": "sk-original",
+            "model": "demo",
+            "timeout": 20,
+            "temperature": 0,
+        }
+        self.assertEqual(self.client.post("/api/config", json=payload).status_code, 200)
+        changed = self.client.post(
+            "/api/config",
+            json={**payload, "api_base": "https://other.example.com", "api_key": ""},
+        )
+        self.assertEqual(changed.status_code, 400)
+        self.assertEqual(api_config.effective()["api_base"], "https://api.example.com")
+
+        unchanged = self.client.post(
+            "/api/config",
+            json={**payload, "api_base": "https://api.example.com/", "api_key": ""},
+        )
+        self.assertEqual(unchanged.status_code, 200)
+        self.assertEqual(api_config.effective()["api_key"], "sk-original")
+
+    def test_environment_key_is_bound_to_matching_endpoint(self):
+        with patch.dict(
+            os.environ,
+            {"LLM_API_KEY": "sk-env-secret", "LLM_API_BASE": ""},
+            clear=False,
+        ):
+            self.assertEqual(api_config.effective()["api_key"], "sk-env-secret")
+            switched = self.client.post(
+                "/api/active-model",
+                json={"provider_id": "qwen", "model": "qwen-plus"},
+            )
+            self.assertEqual(switched.status_code, 200)
+            self.assertEqual(api_config.effective()["api_key"], "")
+            with self.assertRaises(api_config.APIError):
+                api_config.scan_models("qwen")
+            self.assertNotIn(
+                "sk-env-secret",
+                self.client.get("/api/providers").get_data(as_text=True),
+            )
