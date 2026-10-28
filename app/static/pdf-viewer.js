@@ -1,6 +1,6 @@
 "use strict";
 
-import * as pdfjsLib from "./vendor/pdfjs/build/pdf.min.mjs?v=6.4.299";
+import * as pdfjsLib from "./vendor/pdfjs/runtime/pdf.min.mjs?v=6.4.299";
 import {
   EventBus,
   PDFLinkService,
@@ -8,7 +8,7 @@ import {
 } from "./vendor/pdfjs/web/pdf_viewer.mjs?v=6.4.299";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "./vendor/pdfjs/build/pdf.worker.min.mjs?v=6.4.299",
+  "./vendor/pdfjs/runtime/pdf.worker.min.mjs?v=6.4.299",
   import.meta.url
 ).href;
 
@@ -26,72 +26,81 @@ let loadingTask = null;
 let currentPdf = null;
 let loadToken = 0;
 let bound = false;
+let viewerEvents = null;
+let pageTimer = null;
+let fitFrame = null;
 
 const ui = () => ({
   container: document.getElementById("pdf-viewer-container"),
   viewer: document.getElementById("pdf-viewer"),
   loading: document.getElementById("pdf-loading"),
   pageStatus: document.getElementById("pdf-page-status"),
-  zoomStatus: document.getElementById("pdf-zoom-status"),
-  prev: document.getElementById("pdf-prev"),
-  next: document.getElementById("pdf-next"),
-  zoomIn: document.getElementById("pdf-zoom-in"),
-  zoomOut: document.getElementById("pdf-zoom-out"),
-  fit: document.getElementById("pdf-fit"),
 });
 
-function updateToolbar() {
+function updatePageStatus() {
   const el = ui();
-  if (!viewer || !currentPdf) {
-    if (el.pageStatus) el.pageStatus.textContent = "1 / 1";
-    if (el.zoomStatus) el.zoomStatus.textContent = "100%";
-    if (el.prev) el.prev.disabled = true;
-    if (el.next) el.next.disabled = true;
-    return;
-  }
-  const page = viewer.currentPageNumber || 1;
-  const total = currentPdf.numPages || 1;
-  if (el.pageStatus) el.pageStatus.textContent = `${page} / ${total}`;
-  if (el.zoomStatus) {
-    el.zoomStatus.textContent = `${Math.round((viewer.currentScale || 1) * 100)}%`;
-  }
-  if (el.prev) el.prev.disabled = page <= 1;
-  if (el.next) el.next.disabled = page >= total;
+  if (el.pageStatus) el.pageStatus.textContent = `${viewer?.currentPageNumber || 1} / ${currentPdf?.numPages || 1}`;
 }
 
-function bindToolbar() {
+function fitWidth() {
+  if (!viewer || !currentPdf || !ui().container.clientWidth) return;
+  viewer.currentScaleValue = "page-width";
+}
+
+function zoom(factor, origin) {
+  if (!viewer || !currentPdf) return;
+  const scale = viewer.currentScale || 1;
+  const target = Math.max(0.25, Math.min(4, scale * factor));
+  viewer.updateScale({ scaleFactor: target / scale, origin, drawingDelay: 100 });
+}
+
+function bindReader() {
   if (bound) return;
   bound = true;
   const el = ui();
-  el.prev?.addEventListener("click", () => {
-    if (viewer) viewer.currentPageNumber = Math.max(1, viewer.currentPageNumber - 1);
+  let pointerStart = null;
+  el.container.addEventListener("pointerdown", (event) => {
+    pointerStart = { x: event.clientX, y: event.clientY };
   });
-  el.next?.addEventListener("click", () => {
-    if (!viewer || !currentPdf) return;
-    viewer.currentPageNumber = Math.min(
-      currentPdf.numPages,
-      viewer.currentPageNumber + 1
-    );
+  el.container.addEventListener("click", (event) => {
+    if (event.button !== 0 || !event.target.closest(".page") || event.target.closest("a, button, input, textarea, select")) return;
+    if (pointerStart && Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 5) return;
+    if (!window.getSelection()?.isCollapsed) return;
+    zoom(1.15, [event.clientX, event.clientY]);
   });
-  el.zoomIn?.addEventListener("click", () => {
-    if (!viewer) return;
-    viewer.currentScale = Math.min(4, (viewer.currentScale || 1) * 1.15);
-    updateToolbar();
+  el.container.addEventListener("contextmenu", (event) => {
+    if (!event.target.closest(".page") || event.target.closest("a, button, input, textarea, select")) return;
+    event.preventDefault();
+    zoom(1 / 1.15, [event.clientX, event.clientY]);
   });
-  el.zoomOut?.addEventListener("click", () => {
-    if (!viewer) return;
-    viewer.currentScale = Math.max(0.25, (viewer.currentScale || 1) / 1.15);
-    updateToolbar();
+  el.container.addEventListener("keydown", (event) => {
+    if (event.target !== el.container || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (["+", "=", "-", "0"].includes(event.key)) {
+      event.preventDefault();
+      if (event.key === "0") fitWidth();
+      else zoom(event.key === "-" ? 1 / 1.15 : 1.15);
+    }
   });
-  el.fit?.addEventListener("click", () => {
-    if (!viewer) return;
-    viewer.currentScaleValue = "page-width";
-    updateToolbar();
+  el.container.addEventListener("scroll", () => {
+    if (!currentPdf) return;
+    updatePageStatus();
+    el.pageStatus.hidden = false;
+    clearTimeout(pageTimer);
+    pageTimer = setTimeout(() => { el.pageStatus.hidden = true; }, 1100);
+  }, { passive: true });
+  let lastWidth = 0;
+  const observer = new ResizeObserver(() => {
+    const width = el.container.getBoundingClientRect().width;
+    if (!width || Math.abs(width - lastWidth) < 1) return;
+    lastWidth = width;
+    cancelAnimationFrame(fitFrame);
+    fitFrame = requestAnimationFrame(fitWidth);
   });
+  observer.observe(el.container);
 }
 
 export async function loadPdf(url) {
-  bindToolbar();
+  bindReader();
   const el = ui();
   await clearPdf();
   const token = ++loadToken;
@@ -120,17 +129,21 @@ export async function loadPdf(url) {
       eventBus,
       linkService,
       textLayerMode: 1,
+      abortSignal: (viewerEvents = new AbortController()).signal,
     });
     linkService.setViewer(viewer);
     viewer.setDocument(pdf);
     linkService.setDocument(pdf, null);
-    eventBus.on("pagechanging", updateToolbar);
-    eventBus.on("scalechanging", updateToolbar);
-    eventBus.on("pagesinit", () => {
-      viewer.currentScaleValue = "page-width";
-      updateToolbar();
+    eventBus.on("pagechanging", () => {
+      if (!viewer) return;
+      updatePageStatus();
+      window.dispatchEvent(new CustomEvent("learning:pdf-page", { detail: { page: viewer.currentPageNumber } }));
     });
-    updateToolbar();
+    eventBus.on("pagesinit", () => {
+      fitWidth();
+      updatePageStatus();
+    });
+    updatePageStatus();
   } catch (error) {
     if (token !== loadToken) return;
     if (el.viewer) {
@@ -141,17 +154,21 @@ export async function loadPdf(url) {
       el.viewer.appendChild(message);
     }
   } finally {
-    if (el.loading) el.loading.hidden = true;
+    if (token === loadToken && el.loading) el.loading.hidden = true;
   }
 }
 
 export async function clearPdf() {
   loadToken += 1;
+  clearTimeout(pageTimer);
+  cancelAnimationFrame(fitFrame);
   try {
     if (viewer) viewer.setDocument(null);
   } catch (error) {
     /* 已销毁 */
   }
+  viewerEvents?.abort();
+  viewerEvents = null;
   try {
     if (loadingTask) await loadingTask.destroy();
   } catch (error) {
@@ -164,7 +181,8 @@ export async function clearPdf() {
   currentPdf = null;
   const el = ui();
   if (el.viewer) el.viewer.innerHTML = "";
-  updateToolbar();
+  if (el.pageStatus) el.pageStatus.hidden = true;
+  updatePageStatus();
 }
 
 export function goToPage(page) {

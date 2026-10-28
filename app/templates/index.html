@@ -18,10 +18,11 @@
     <span class="brand">学习助手</span>
     <span class="crumb" id="topbar-crumb" hidden></span>
     <span class="grow"></span>
-    <button type="button" id="btn-chat-toggle" class="icon-btn pane-toggle" title="显示或隐藏右侧栏" aria-label="显示或隐藏右侧栏" aria-pressed="true">
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <rect x="2.5" y="4" width="15" height="12" rx="2.2" fill="#ffffff" stroke="currentColor" stroke-width="1.8"/>
-        <path d="M12.6 4.9h2.9c.7 0 1.2.5 1.2 1.2v7.8c0 .7-.5 1.2-1.2 1.2h-2.9z" fill="currentColor"/>
+    <button type="button" id="btn-chat-toggle" class="icon-btn pane-toggle" title="收起 AI 侧栏" aria-label="收起 AI 侧栏" aria-expanded="true" aria-controls="rail-right">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="4.5" width="17" height="15" rx="3"/>
+        <path d="M14.5 4.5v15"/>
+        <path class="pane-toggle-detail" d="M17.5 8v8"/>
       </svg>
     </button>
     <a id="btn-settings" class="btn" href="/settings" title="工作台设置">设置</a>
@@ -67,21 +68,11 @@
         <div class="doc-empty" id="doc-empty"></div>
         <div class="pdf-view" id="pdf-view" hidden>
           <div class="pdf-shell">
-            <div class="pdf-toolbar">
-              <button type="button" id="pdf-prev" class="pdf-tool-btn" title="上一页" aria-label="上一页">‹</button>
-              <span class="pdf-page-status" id="pdf-page-status">1 / 1</span>
-              <button type="button" id="pdf-next" class="pdf-tool-btn" title="下一页" aria-label="下一页">›</button>
-              <span class="pdf-separator" aria-hidden="true"></span>
-              <button type="button" id="pdf-zoom-out" class="pdf-tool-btn" title="缩小" aria-label="缩小">−</button>
-              <span class="pdf-zoom-status" id="pdf-zoom-status">100%</span>
-              <button type="button" id="pdf-zoom-in" class="pdf-tool-btn" title="放大" aria-label="放大">+</button>
-              <span class="grow"></span>
-              <button type="button" id="pdf-fit" class="pdf-tool-btn pdf-fit" title="适应宽度">适应宽度</button>
-            </div>
             <div class="pdf-stage">
-              <div class="pdf-viewer-container" id="pdf-viewer-container">
+              <div class="pdf-viewer-container" id="pdf-viewer-container" tabindex="0" role="region" aria-label="PDF 阅读区" aria-description="左键放大，右键缩小；也可用加号、减号缩放，数字 0 恢复适应宽度">
                 <div class="pdfViewer" id="pdf-viewer"></div>
               </div>
+              <output class="pdf-page-indicator" id="pdf-page-status" aria-label="当前页码" hidden>1 / 1</output>
               <div class="pdf-loading" id="pdf-loading" hidden>正在加载 PDF…</div>
             </div>
           </div>
@@ -139,11 +130,10 @@
 
       <!-- 对话 -->
       <section class="pane is-active" id="pane-chat" role="tabpanel" aria-labelledby="tab-chat">
-        <div class="pane-scroll" id="chat-messages">
-          <p class="empty">打开一份资料后，这里可以就它提问。</p>
-        </div>
+        <div class="pane-scroll" id="chat-messages"></div>
+        <div class="chat-suggestions" id="chat-suggestions" role="group" aria-label="建议提问"></div>
         <div class="composer">
-          <textarea id="chat-input" rows="2" spellcheck="false" placeholder="就这份资料提问，可以不划段"></textarea>
+          <textarea id="chat-input" rows="2" spellcheck="false" placeholder="有疑惑？" aria-label="有疑惑？"></textarea>
           <button type="button" id="btn-chat-send" class="btn btn-primary" disabled>发送</button>
         </div>
       </section>
@@ -165,14 +155,20 @@
               placeholder="你的笔记。AI 不会自动改这里。"></textarea>
 
             <div class="notes-ai">
-              <label class="field-label" for="notes-instruction">让 AI 帮写点什么（可选）</label>
-              <textarea id="notes-instruction" rows="2" spellcheck="false"
-                placeholder="例如：把划选整理成三条要点"></textarea>
-              <button type="button" id="btn-notes-draft" class="btn btn-small" disabled>生成草稿</button>
+              <label class="field-label" for="notes-instruction">让 AI 帮写点什么</label>
+              <div class="notes-composer" id="notes-composer">
+                <textarea id="notes-instruction" rows="2" spellcheck="false"
+                  placeholder="例如：把划选整理成三条要点"></textarea>
+                <button type="button" id="btn-notes-draft" class="notes-send" aria-label="发送笔记请求" title="发送" disabled>
+                  <svg class="notes-send-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 15V5m-4 4 4-4 4 4"/></svg>
+                  <svg class="notes-stop-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="5.5" y="5.5" width="9" height="9" rx="1"/></svg>
+                </button>
+              </div>
+              <span class="notes-generation-status" id="notes-generation-status" role="status" aria-live="polite"></span>
             </div>
 
             <div class="draft" id="notes-draft-wrap" hidden>
-              <p class="draft-head">草稿预览，还没写进笔记</p>
+              <p class="draft-head" id="notes-draft-heading">草稿预览，还没写进笔记</p>
               <div class="draft-body markdown" id="notes-draft-body"></div>
               <label class="draft-replace">
                 <input type="checkbox" id="notes-draft-replace"> 替换全文（不勾就追加到末尾）

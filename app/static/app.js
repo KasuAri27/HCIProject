@@ -16,12 +16,19 @@ let currentPdfUrl = "";
 let selectedDocId = "";
 
 let chatMessages = [];
+let chatSending = false;
+let suggestionsTimer = null;
+let suggestionsSequence = 0;
+let suggestionsController = null;
+let suggestionsKey = "";
+let pdfReadingPage = 1;
 let notesDocId = "";
 let notesTitle = "";
 let notesContent = "";
 let notesDirty = false;
 let notesSuggestions = [];
 let notesDraftText = "";
+let notesDraftRequest = null;
 let notesAutoSuggestDoc = "";
 let notesSaveTimer = null;
 let notesSaving = false;
@@ -37,7 +44,7 @@ let railLeftPinned = false;
 let pdfShellPromise = null;
 
 function getPdfShell() {
-  if (!pdfShellPromise) pdfShellPromise = import("./pdf-viewer.js?v=6.4.299-2");
+  if (!pdfShellPromise) pdfShellPromise = import("./pdf-viewer.js?v=6.4.299-3");
   return pdfShellPromise;
 }
 
@@ -144,6 +151,7 @@ const badgeChat = $("badge-chat");
 const dotNotes = $("dot-notes");
 const dotExercise = $("dot-exercise");
 const chatMessagesEl = $("chat-messages");
+const chatSuggestionsEl = $("chat-suggestions");
 const chatInput = $("chat-input");
 const btnChatSend = $("btn-chat-send");
 const notesEmpty = $("notes-empty");
@@ -160,6 +168,8 @@ const notesDraftBody = $("notes-draft-body");
 const notesDraftReplace = $("notes-draft-replace");
 const btnNotesDraftApply = $("btn-notes-draft-apply");
 const btnNotesDraftDiscard = $("btn-notes-draft-discard");
+const notesGenerationStatus = $("notes-generation-status");
+const notesDraftHeading = $("notes-draft-heading");
 const btnNotesRefreshSuggest = $("btn-notes-refresh-suggest");
 const notesSuggestionsList = $("notes-suggestions-list");
 const btnExercise = $("btn-exercise");
@@ -307,7 +317,10 @@ function syncChatToggle() {
   if (!btnChatToggle) return;
   const open = railRightOpen();
   btnChatToggle.classList.toggle("is-active", open);
-  btnChatToggle.setAttribute("aria-pressed", open ? "true" : "false");
+  btnChatToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  const label = open ? "收起 AI 侧栏" : "展开 AI 侧栏";
+  btnChatToggle.setAttribute("aria-label", label);
+  btnChatToggle.title = label;
 }
 
 function setLeftRail(open, pinned = false) {
@@ -938,9 +951,13 @@ async function loadDocument(docId, options = {}) {
     return;
   }
   if (notesDirty) await saveNotesNow();
+  stopNotesDraft(false);
   await savePositionNow();
 
   const token = ++docToken;
+  closeBubble(true);
+  resetChatSuggestions();
+  pdfReadingPage = 1;
   selectedDocId = docId;
   currentDoc = documents.find((d) => d.id === docId) || currentDoc;
 
@@ -961,6 +978,7 @@ async function loadDocument(docId, options = {}) {
     await loadChat(docId);
     await loadLearningEvidence(docId);
     await refreshSessionQuiet();
+    scheduleChatSuggestions();
     renderExercise();
     renderReview();
     updateTabBadges();
@@ -1154,6 +1172,8 @@ function renderStatusCard(data) {
 }
 
 function showEmpty() {
+  stopNotesDraft(false);
+  resetChatSuggestions();
   docPage.hidden = true;
   docEmpty.hidden = false;
   topbarCrumb.hidden = true;
@@ -1174,6 +1194,8 @@ function showEmpty() {
   notesContentEl.value = "";
   notesDraftWrap.hidden = true;
   notesDraftBody.innerHTML = "";
+  notesDraftText = "";
+  notesGenerationStatus.textContent = "";
   notesSuggestions = [];
   notesAutoSuggestDoc = "";
   renderSuggestions();
@@ -1323,6 +1345,11 @@ function restorePosition(position) {
 
 docScroll.addEventListener("scroll", () => {
   schedulePositionSave();
+  scheduleChatSuggestions();
+});
+window.addEventListener("learning:pdf-page", (event) => {
+  pdfReadingPage = event.detail.page;
+  scheduleChatSuggestions();
 });
 
 window.addEventListener("beforeunload", () => {
@@ -1356,6 +1383,7 @@ function closeBubble(force = false) {
   bubbleInput.value = "";
   selection = null;
   resetCheckUi();
+  scheduleChatSuggestions();
 }
 
 function openBubble(info) {
@@ -1368,6 +1396,7 @@ function openBubble(info) {
   bubble.hidden = false;
   openRightRail();
   switchTab("chat");
+  scheduleChatSuggestions();
 }
 
 function selectionOffsets(block, range, which) {
@@ -1437,15 +1466,84 @@ document.addEventListener("mousedown", (e) => {
 // ------------------------------------------------------------
 // 对话
 // ------------------------------------------------------------
-function renderChat() {
-  if (!currentDocId()) {
-    chatMessagesEl.innerHTML = '<p class="empty">打开一份资料后，这里可以就它提问。</p>';
-    updateTabBadges();
+const DEFAULT_CHAT_QUESTIONS = [
+  "帮我梳理这份资料的重点",
+  "用一个例子解释核心概念",
+  "出一道题，检查我的理解",
+];
+
+function renderChatSuggestions(questions = DEFAULT_CHAT_QUESTIONS, source = "default") {
+  chatSuggestionsEl.replaceChildren();
+  chatSuggestionsEl.dataset.source = source;
+  questions.forEach((question) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chat-suggestion";
+    button.disabled = chatSending;
+    button.title = `发送：${question}`;
+    const text = document.createElement("span");
+    text.textContent = question;
+    button.appendChild(text);
+    button.insertAdjacentHTML("beforeend", '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15 4v7a2 2 0 0 1-2 2H4m4-4-4 4 4 4"/></svg>');
+    button.addEventListener("click", () => sendChat(question, selection?.quote || ""));
+    chatSuggestionsEl.appendChild(button);
+  });
+}
+
+function resetChatSuggestions() {
+  clearTimeout(suggestionsTimer);
+  ++suggestionsSequence;
+  suggestionsController?.abort();
+  suggestionsKey = "";
+  chatSuggestionsEl.setAttribute("aria-busy", "false");
+  renderChatSuggestions();
+}
+
+function scheduleChatSuggestions() {
+  clearTimeout(suggestionsTimer);
+  suggestionsTimer = setTimeout(refreshChatSuggestions, 600);
+}
+
+async function refreshChatSuggestions() {
+  if (chatSending) return;
+  if (!ready() || !llmConfigured()) {
+    if (suggestionsKey) resetChatSuggestions();
     return;
   }
-  if (!chatMessages.length) {
-    chatMessagesEl.innerHTML =
-      '<p class="empty">还没有消息。划选一段「现场问 / 放进对话」，或在下面直接提问。</p>';
+  const context = {
+    doc_id: currentDocId(),
+    quote: selection?.quote?.slice(0, 2000) || "",
+    block_id: selection?.blockId || (currentViewMode === "markdown" ? collectPosition()?.block_id : "") || "",
+    page: currentViewMode === "pdf" ? pdfReadingPage : 0,
+  };
+  const key = JSON.stringify([context, currentVersionId, chatMessages.slice(-6)]);
+  if (key === suggestionsKey) return;
+  suggestionsKey = key;
+  suggestionsController?.abort();
+  suggestionsController = new AbortController();
+  const sequence = ++suggestionsSequence;
+  renderChatSuggestions();
+  chatSuggestionsEl.setAttribute("aria-busy", "true");
+  try {
+    const data = await api("/api/chat/suggestions", {
+      method: "POST", signal: suggestionsController.signal,
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify(context),
+    });
+    if (sequence !== suggestionsSequence) return;
+    if (Array.isArray(data.suggestions) && data.suggestions.length === 3 &&
+        data.suggestions.every((q) => typeof q === "string" && q.trim())) {
+      renderChatSuggestions(data.suggestions, data.source);
+    }
+  } catch (error) {
+    // 默认问题始终可用，建议生成失败不打断阅读与对话。
+  } finally {
+    if (sequence === suggestionsSequence) chatSuggestionsEl.setAttribute("aria-busy", "false");
+  }
+}
+
+function renderChat() {
+  if (!currentDocId() || !chatMessages.length) {
+    chatMessagesEl.replaceChildren();
     updateTabBadges();
     return;
   }
@@ -1496,16 +1594,20 @@ async function loadChat(docId) {
   chatMessages = [];
   try {
     const data = await api(`/api/chat?doc_id=${encodeURIComponent(docId)}`);
+    if (docId !== currentDocId()) return;
     chatMessages = data.messages || [];
   } catch (e) {
+    if (docId !== currentDocId()) return;
     chatMessages = [];
   }
   renderChat();
+  scheduleChatSuggestions();
 }
 
 async function sendChat(question, quote) {
+  if (chatSending) return;
   if (!ready()) {
-    showToast("资料还没解析完成");
+    showToast(currentDocId() ? "资料还没解析完成" : "先打开一份资料，再提问");
     return;
   }
   if (!llmConfigured()) {
@@ -1517,24 +1619,32 @@ async function sendChat(question, quote) {
     showToast("先写一句问题，或在正文里划选一段");
     return;
   }
-  btnChatSend.disabled = true;
+  chatSending = true;
+  const sendingDocId = currentDocId();
+  ++suggestionsSequence;
+  suggestionsController?.abort();
+  chatSuggestionsEl.setAttribute("aria-busy", "false");
+  updateLlmStatus();
   chatMessagesEl.insertAdjacentHTML("beforeend", '<div class="loading chat-pending">思考中…</div>');
   try {
     const data = await postJson("/api/chat", {
-      doc_id: currentDocId(),
+      doc_id: sendingDocId,
       title: currentDoc ? currentDoc.title : undefined,
       question: q || "讲这段",
       quote: quote || undefined,
       block_id: quote ? (selection && selection.blockId) || undefined : undefined,
     });
+    if (sendingDocId !== currentDocId()) return;
     chatMessages = data.messages || [];
     renderChat();
     chatInput.value = "";
   } catch (e) {
     showToast(e.message, 5000);
   } finally {
+    chatSending = false;
     chatMessagesEl.querySelector(".chat-pending")?.remove();
     updateLlmStatus();
+    scheduleChatSuggestions();
   }
 }
 
@@ -1783,7 +1893,7 @@ function updateNotesEnabled() {
     btnNotesExport.disabled = !hasDoc || !(notesContentEl.value || "").trim();
   }
   const ai = hasDoc && ready() && llmConfigured();
-  btnNotesDraft.disabled = !ai;
+  syncNotesSend();
   btnNotesRefreshSuggest.disabled = !ai;
 }
 
@@ -1874,6 +1984,8 @@ function exportNotes() {
 }
 
 async function loadNotes(docId) {
+  stopNotesDraft(false);
+  notesGenerationStatus.textContent = "";
   notesDocId = docId;
   notesDirty = false;
   notesSuggestions = [];
@@ -2013,29 +2125,109 @@ async function fetchSuggestions(showOk) {
   }
 }
 
+function syncNotesSend() {
+  const generating = !!notesDraftRequest;
+  btnNotesDraft.classList.toggle("is-generating", generating);
+  btnNotesDraft.setAttribute("aria-label", generating ? "停止生成" : "发送笔记请求");
+  btnNotesDraft.title = generating ? "停止生成" : "发送";
+  btnNotesDraft.disabled = !generating && (!notesDocId || !ready() || !llmConfigured());
+  btnNotesDraftApply.disabled = generating || !notesDraftText;
+  btnNotesDraftDiscard.disabled = generating;
+}
+
+function renderNotesDraft(text) {
+  notesDraftBody.classList.remove("is-streaming");
+  setMarkdownHtml(notesDraftBody, text);
+  attachCopyButtons(notesDraftBody);
+}
+
+function stopNotesDraft(showStatus = true) {
+  const request = notesDraftRequest;
+  if (!request) return;
+  notesDraftRequest = null;
+  request.controller.abort();
+  notesDraftText = request.text || request.previousText;
+  notesDraftWrap.hidden = !notesDraftText;
+  renderNotesDraft(notesDraftText);
+  notesDraftHeading.textContent = request.text ? "已停止，保留已生成内容" : "草稿预览，还没写进笔记";
+  notesGenerationStatus.textContent = showStatus ? "已停止生成" : "";
+  syncNotesSend();
+}
+
 async function requestDraft() {
-  if (!notesDocId || !llmConfigured()) return;
-  btnNotesDraft.disabled = true;
+  if (notesDraftRequest) { stopNotesDraft(); return; }
+  if (!notesDocId || !ready() || !llmConfigured()) return;
+  const request = {
+    controller: new AbortController(), docId: notesDocId,
+    text: "", previousText: notesDraftText,
+  };
+  notesDraftRequest = request;
+  notesDraftText = "";
   notesDraftWrap.hidden = false;
-  notesDraftBody.innerHTML = '<div class="loading">生成草稿中…</div>';
+  notesDraftHeading.textContent = "草稿预览，还没写进笔记";
+  notesDraftBody.replaceChildren();
+  notesDraftBody.classList.add("is-streaming");
+  notesGenerationStatus.textContent = "正在生成…";
+  syncNotesSend();
+  let reader = null;
+  let completed = false;
+  function receive(text) {
+    if (notesDraftRequest !== request || notesDocId !== request.docId) return;
+    request.text += text;
+    notesDraftBody.textContent = request.text;
+  }
   try {
-    const data = await postJson("/api/notes/draft", {
-      doc_id: notesDocId,
-      instruction: notesInstruction.value.trim() || undefined,
+    const response = await fetch("/api/notes/draft", {
+      method: "POST", signal: request.controller.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ doc_id: request.docId, instruction: notesInstruction.value.trim(), stream: true }),
     });
-    notesDraftText = data.draft || "";
-    setMarkdownHtml(notesDraftBody, notesDraftText || "（空草稿）");
-    attachCopyButtons(notesDraftBody);
-  } catch (e) {
-    notesDraftBody.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
-    showToast(e.message, 5000);
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || `请求失败（HTTP ${response.status}）`);
+    }
+    if (!response.headers.get("content-type")?.includes("text/event-stream")) {
+      receive((await response.json()).draft || "");
+      completed = true;
+    } else {
+      reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      function parseLine(line) {
+        if (!line.startsWith("data:")) return;
+        const event = JSON.parse(line.slice(5).trim());
+        if (event.error) throw new Error(event.error);
+        if (typeof event.delta === "string") receive(event.delta);
+        if (event.done) completed = true;
+      }
+      while (!completed) {
+        const { value, done } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+        lines.forEach((line) => parseLine(line.trim()));
+        if (done) { if (buffer.trim()) parseLine(buffer.trim()); break; }
+      }
+      if (!completed) throw new Error("连接已中断，已保留收到的内容");
+    }
+    if (notesDraftRequest !== request || notesDocId !== request.docId) return;
+    notesDraftText = request.text.trim();
+    renderNotesDraft(notesDraftText || "（空草稿）");
+    notesGenerationStatus.textContent = notesDraftText ? "已生成，确认后写进笔记" : "没有生成内容，请调整要求后重试";
+  } catch (error) {
+    if (notesDraftRequest !== request || request.controller.signal.aborted) return;
+    notesDraftText = request.text || request.previousText;
+    notesDraftWrap.hidden = !notesDraftText;
+    renderNotesDraft(notesDraftText);
+    notesGenerationStatus.textContent = error.message || "生成失败，请重试";
   } finally {
-    updateNotesEnabled();
+    if (reader) { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+    if (notesDraftRequest === request) { notesDraftRequest = null; syncNotesSend(); }
   }
 }
 
 async function applyDraft() {
-  if (!notesDraftText) return;
+  if (notesDraftRequest || !notesDraftText) return;
   prepareNotesWrite();
   notesContentEl.value = notesDraftReplace.checked
     ? notesDraftText
@@ -2065,6 +2257,12 @@ btnNotesRefreshSuggest.addEventListener("click", () => {
   fetchSuggestions(true);
 });
 btnNotesDraft.addEventListener("click", requestDraft);
+notesInstruction.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && !event.isComposing) {
+    event.preventDefault();
+    if (!notesDraftRequest) requestDraft();
+  }
+});
 btnNotesDraftApply.addEventListener("click", applyDraft);
 btnNotesDraftDiscard.addEventListener("click", () => {
   notesDraftWrap.hidden = true;
@@ -2297,8 +2495,9 @@ async function loadTopbarProfile() {
 
 function updateLlmStatus() {
   const canAI = ready() && llmConfigured();
-  btnChatSend.disabled = !canAI;
-  btnNotesDraft.disabled = !canAI || !notesDocId;
+  btnChatSend.disabled = !canAI || chatSending;
+  chatSuggestionsEl.querySelectorAll("button").forEach((button) => { button.disabled = chatSending; });
+  syncNotesSend();
   btnNotesRefreshSuggest.disabled = !canAI || !notesDocId;
   btnExercise.disabled = !canAI;
   btnSubmit.disabled = !canAI || !questionCache;
@@ -2700,7 +2899,11 @@ function bindBlockClicks() {
 // ------------------------------------------------------------
 bindGutter(gutterLeft, railLeft, "left", "learning.railL", 220, 460);
 bindGutter(gutterRight, railRight, "right", "learning.railR", 300, 560);
-window.addEventListener("resize", moveTabInk);
+window.addEventListener("resize", () => {
+  moveTabInk();
+  syncChatToggle();
+  syncScrim();
+});
 window.addEventListener("storage", (event) => {
   if (
     event.key === "learning.readFontSize" ||
@@ -2713,4 +2916,5 @@ document.addEventListener("DOMContentLoaded", () => {});
 switchTab("chat");
 moveTabInk();
 loadReadingSettings();
+renderChatSuggestions();
 loadPage();
