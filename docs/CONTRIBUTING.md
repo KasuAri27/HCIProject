@@ -8,6 +8,7 @@
 - 功能分支：`feat/<scope>-<short-desc>`，例如 `feat/import-docx`。
 - 修复分支：`fix/<scope>-<short-desc>`，例如 `fix/reader-position`。
 - 文档/工程：`docs/<short-desc>`、`chore/<short-desc>`。
+- Codex 协作分支允许 `codex/<short-desc>`。来源分支使用小写字母、数字与短横线；PR 标题执行同样的提交词校验。
 - 一个提交只做一件逻辑上的事，不要把重构、功能和格式化混在一起。
 - `main` 已开启分支保护：改动通过 PR 合并，PR 必须通过 `checks` 与 `commit-messages` 两个检查。
 - 推送前先同步远程：`git pull --rebase origin main`；不要对 `main` 使用 force push。
@@ -18,9 +19,11 @@
 
 ```bash
 python scripts/check_repo_layout.py
-python -m ruff check app tests scripts
+python -m ruff check app tests scripts launcher
+python -m compileall -q app tests scripts launcher
 python -m unittest discover -s tests -v
-node --check app/static/app.js
+python scripts/check_frontend.py
+python -m unittest discover -s tests/browser -v
 python scripts/check_commit_messages.py --message "feat(import): 支持 DOCX 导入"
 ```
 
@@ -48,6 +51,8 @@ python launcher/launcher.py
 - 摘要不超过 50 个字符，末尾不加句号。
 - 需要解释动机、影响和验证时，空一行写正文；正文每行尽量不超过 72 个字符。
 - 一个提交只写一个主题；不要用“更新代码”“杂项”这类空摘要。
+- 自动检查要求摘要包含中文，并拒绝约定的空泛摘要；语义是否具体、是否单一主题仍需要审阅。
+- 真正的 merge 通过提交拓扑跳过；普通提交不能靠 `Merge ` 或 `Revert ` 前缀免检。回退请使用 `revert: 回退具体改动`。
 
 ### type
 
@@ -121,28 +126,34 @@ chore: 初始化仓库
 ## 6. PR 与推送
 
 - 推送前确认工作区干净，提交信息符合本规范。
-- PR 描述至少包含：改动目的、主要改动、验证方式、已知限制。
+- **创建或更新 PR 前，必须先阅读并按 [PR 模板](../.github/pull_request_template.md)填写**；后续所有 PR 统一遵守。[简短示例](PR_EXAMPLE_CI.md)。
+- 正文只保留「内容 / 验证 / 注意」三节，每节 1～2 句，建议 200 字以内。内容简述目的与主要改动，验证写结果，注意写限制；没有限制写“无”。详细方案和日志只放链接，自动检查上限为正文 800 字符。
+- 验证结果要区分本地、GitHub CI、模拟边界与真实外部工具。没有执行或没有环境时明确写出。
 - UI 改动建议附截图或操作路径；数据层改动附迁移/回滚说明。
-- 合并后删除已合并的功能分支；不要重写已推送的 `main` 历史。
+- **PR 合并后删除其远端及本地来源分支，不再保留旧分支**；不要重写已推送的 `main` 历史。CI 的清理工作流负责删除同仓库远端分支，默认分支与合并后已新增提交的分支除外；本地分支在切离后删除。
 
 ## 7. CI 流水线
 
-`.github/workflows/ci.yml` 在 push 到 `main` 和所有 PR 上运行两个 job：
+`.github/workflows/ci.yml` 在 push 到 `main` 和 PR 上运行质量门禁，保留两个必需检查名称：
 
 | job | 检查内容 |
 |---|---|
-| `checks` | 仓库布局、`ruff`、`unittest`、`node --check` |
-| `commit-messages` | 范围内每条提交信息的格式 |
+| `checks` | 汇总 Linux 质量检查、Windows 单测、浏览器关键流程、真实 OCR；任一失败、跳过或取消均不放行 |
+| `commit-messages` | 范围内每条非 merge 提交信息、PR 标题与来源分支 |
 
-本地预跑与 CI 等价：
+基础本地预跑（先激活 D:\Dev 下的开发环境，前端工具安装方式见 [CI.md](CI.md)）：
 
 ```bash
-pip install -r requirements-dev.txt
+pip install -r requirements-dev.txt -r requirements-browser.txt
 python scripts/check_repo_layout.py
-python -m ruff check app tests scripts
+python -m ruff check app tests scripts launcher
+python -m compileall -q app tests scripts launcher
 python -m unittest discover -s tests -v
-node --check app/static/app.js
+python scripts/check_frontend.py
+python -m unittest discover -s tests/browser -v
 python scripts/check_commit_messages.py --range origin/main..HEAD
 ```
 
-合并/自动 revert 提交会被跳过；其余提交必须满足第 3 节的格式。`main` 的分支保护要求这两个检查通过才能合并。紧急情况下可以临时在仓库 Settings → Branches 里放宽保护，但不要把不合规的提交直接推上 `main`。
+外部工具与密钥扫描另按 [CI 检查与验收](CI.md)执行；完整 GitHub 矩阵与本地环境不等同。Office 的真实转换需要受控 Windows + Office 环境，常规 PR 中的 Windows 契约测试不替代真实验收。
+
+第六项“提交范围回退”按用户要求暂缓，缺少或无法读取比较基准时仍有已知问题。CI 审查前五项的实现、边界及需求到测试的对应见 [CI.md](CI.md)。`main` 已有的必需状态检查是 `checks` 与 `commit-messages`；本轮未更改仓库保护设置，完整强制 PR/更新/绕过策略尚未获权限核实。
