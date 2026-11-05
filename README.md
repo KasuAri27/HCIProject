@@ -43,9 +43,10 @@ Windows 也可以双击 `launcher/start.bat`；需要原生桌面窗口时运行
 
 - **提交前先阅读提交标准**：[docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)。分支命名、提交词格式、提交前检查都以它为准；推送和 PR 会跑 CI，不合规会拦下。
 - **当前任务和限制看 TODO**：[docs/TODO.md](docs/TODO.md)。
+- **开发说明**：[数据库与建库](docs/DATABASE.md)、[当前架构](docs/ARCHITECTURE.md)、[核心契约](docs/CONTRACTS.md)。
 - 本地数据和密钥不提交：`db/learning.db`、`db/originals/`、`db/backups/`、`db/api_config.json` 以及 `library/` 中的用户资料。
 - 不配置 API 也能阅读、标注、记笔记和恢复位置；AI 只是可选增强。
 - DOCX/PPTX 转 PDF 依赖 Windows 与本机 Microsoft Office（Word/PowerPoint）；PDF 播放模式暂不记录滚动位置，也不能划选标注。
 - 扫描 PDF 的 OCR 需要系统安装 Tesseract，并准备中文语言包（默认 `chi_sim+eng`，可用 `LEARN_OCR_LANG` 调整）。缺少引擎时页面会显示明确提示，文本型 PDF 不受影响。
 - PPTX 图表数据、嵌入公式和动画暂不解析；旧版本不提供切换阅读界面。
-- 其他文档统一放在 `docs/` 下，根目录只保留本 README。
+- 开发前先阅读根目录的项目约束 [AGENTS.md](AGENTS.md)；其他文档统一放在 `docs/` 下，根目录文档只保留本 README 和 AGENTS.md。

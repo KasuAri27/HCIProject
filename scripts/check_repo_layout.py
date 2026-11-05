@@ -1,7 +1,7 @@
 """检查仓库布局与本地数据是否被误提交。
 
 规则见 docs/CONTRIBUTING.md 与根目录 README：
-- 根目录只允许 README.md 作为文档，其他文档放 docs/；
+- 根目录文档只允许 README.md 和项目约束 AGENTS.md，其他文档放 docs/；
 - db/ 下的运行时数据、library/ 下的用户资料不进入 Git；
 - 根目录只保留启动配置与依赖清单，启动脚本在 launcher/ 下。
 
@@ -16,6 +16,7 @@ ROOT_ALLOWED = {
     ".gitattributes",
     ".gitignore",
     "README.md",
+    "AGENTS.md",
     "requirements.txt",
     "requirements-dev.txt",
     "requirements-browser.txt",
