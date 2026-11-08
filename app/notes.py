@@ -176,17 +176,24 @@ def suggest(doc_id: str, quote: str = "") -> dict[str, Any]:
     return {"doc_id": doc_id, "suggestions": _normalize_suggestions(llm.parse_json(reply))}
 
 
-def draft(doc_id: str, instruction: str = "", quote: str = "") -> dict[str, Any]:
+def _draft_messages(doc_id: str, instruction: str = "", quote: str = "") -> list[dict]:
     context = _build_observation_context(doc_id, quote)
     instr = instruction or _DEFAULT_DRAFT_INSTRUCTION
-    messages = [
+    return [
         {"role": "system", "content": _DRAFT_SYSTEM},
         {
             "role": "user",
             "content": f"{context}\n\n【用户要求】\n{instr}\n\n请输出 Markdown 草稿。",
         },
     ]
-    reply = llm.chat(messages, **api_config.llm_kwargs())
+
+
+def draft_stream(doc_id: str, instruction: str = "", quote: str = ""):
+    yield from llm.chat_stream(_draft_messages(doc_id, instruction, quote), **api_config.llm_kwargs())
+
+
+def draft(doc_id: str, instruction: str = "", quote: str = "") -> dict[str, Any]:
+    reply = llm.chat(_draft_messages(doc_id, instruction, quote), **api_config.llm_kwargs())
     text = (reply or "").strip()
     if text.startswith("```") and text.endswith("```"):
         lines = text.split("\n")

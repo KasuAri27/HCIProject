@@ -38,12 +38,14 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.addCleanup(self.save_trace)
         self.errors = []
         self.expected_failures = set()
+        self.expected_pdf_cancellations = set()
         self.page = self.context.new_page()
         self.page.on("pageerror", lambda error: self.errors.append(f"pageerror: {error}"))
         self.page.on("console", self.console_message)
         self.page.on("response", self.response)
-        self.page.on("requestfailed", lambda req: self.errors.append(f"requestfailed: {req.url} {req.failure}"))
+        self.page.on("requestfailed", self.request_failed)
         self.context.route("**/*", self.only_local_requests)
+        self.context.route("**/favicon.ico", lambda route: route.fulfill(status=204))
         self.page.goto(self.server.url, wait_until="networkidle")
         self.assertEqual(self.errors, [], "启动阶段出现浏览器错误")
         expect(self.page.locator("#library-tree")).not_to_contain_text("正在扫描")
@@ -71,6 +73,12 @@ class WorkbenchBrowserTests(unittest.TestCase):
         if response.status >= 400 and (path, response.status) not in self.expected_failures:
             self.errors.append(f"HTTP {response.status}: {path}")
 
+    def request_failed(self, request):
+        # PDF.js 可取消该文档的初始整文件请求；实际画布和 PDF 字节仍须验收。
+        if request.failure == "net::ERR_ABORTED" and urlparse(request.url).path in self.expected_pdf_cancellations:
+            return
+        self.errors.append(f"requestfailed: {request.url} {request.failure}")
+
     def save_trace(self):
         artifacts = Path(os.environ.get("HCI_TEST_ARTIFACTS", ROOT / ".uitest/browser"))
         artifacts.mkdir(parents=True, exist_ok=True)
@@ -86,6 +94,8 @@ class WorkbenchBrowserTests(unittest.TestCase):
             })
         self.assertTrue(response.value.ok, response.value.text())
         doc_id = response.value.json()["document_id"]
+        if name.lower().endswith(".pdf"):
+            self.expected_pdf_cancellations.add(f"/api/documents/{doc_id}/pdf")
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             data = self.context.request.get(f"{self.server.url}/api/documents/{doc_id}").json()
@@ -101,27 +111,25 @@ class WorkbenchBrowserTests(unittest.TestCase):
 
     def open_document(self, doc_id):
         row = self.page.locator(f'.file[data-doc-id="{doc_id}"]')
-        narrow_closed = (
-            self.page.viewport_size["width"] <= 900
-            and "rail-left-open" not in (self.page.locator("body").get_attribute("class") or "").split()
-        )
-        if narrow_closed or not row.is_visible():
+        if "rail-left-open" not in (self.page.locator("body").get_attribute("class") or "").split():
             self.page.locator("#btn-rail-toggle").click()
         row.click()
-        expect(self.page.locator("#doc-head")).to_be_visible()
+        expect(self.page.locator("#topbar-crumb")).to_be_attached()
+        if "rail-left-open" in (self.page.locator("body").get_attribute("class") or "").split():
+            self.page.locator("#btn-rail-toggle").click()
         expect(self.page.locator(f'.file[data-doc-id="{doc_id}"]')).to_have_class("file is-active")
 
     def test_no_api_startup_and_secondary_pages(self):
-        expect(self.page.locator("#llm-status")).to_contain_text(re.compile("未配置|配置模型"))
+        expect(self.page.locator(".chat-suggestion")).to_have_count(3)
         expect(self.page.locator("#btn-chat-send")).to_be_disabled()
         self.assertEqual(self.context.request.get(self.server.url + "/api/health").json()["app"], "local-learning-assistant")
         # 独立工作台页面存在于后续功能分支；main 基线的阅读器仍用设置弹窗。
-        paths = ("/user", "/settings", "/api-config") if self.page.locator("#btn-workspace").count() else ()
+        paths = ("/user", "/settings", "/api-config")
         for path in paths:
             self.page.goto(self.server.url + path, wait_until="networkidle")
             expect(self.page.locator("body")).to_be_visible()
         self.page.goto(self.server.url, wait_until="networkidle")
-        expect(self.page.locator("#btn-import")).to_be_enabled()
+        expect(self.page.locator("#import-input")).to_be_enabled()
 
     def test_import_notes_refresh_and_document_isolation(self):
         first = self.upload("first.md", "# 第一份资料\n\n注意力按权重聚合。".encode())
@@ -160,14 +168,12 @@ class WorkbenchBrowserTests(unittest.TestCase):
         document.save()
         doc_id = self.upload("sample.pdf", pdf.getvalue())
         expect(self.page.locator("#pdf-view")).to_be_visible()
-        expect(self.page.locator("#pdf-frame")).to_be_visible()
-        expect(self.page.locator("#pdf-frame")).to_have_attribute("src", f"/api/documents/{doc_id}/pdf?v=" + self.context.request.get(f"{self.server.url}/api/documents/{doc_id}").json()["version"]["id"])
-        response = self.context.request.get(self.server.url + self.page.locator("#pdf-frame").get_attribute("src"))
+        expect(self.page.locator("#pdf-viewer canvas").first).to_be_visible()
+        document_data = self.context.request.get(f"{self.server.url}/api/documents/{doc_id}").json()
+        response = self.context.request.get(self.server.url + document_data["pdf_url"])
         self.assertEqual(response.status, 200)
         self.assertIn("application/pdf", response.headers["content-type"])
         self.assertTrue(response.body().startswith(b"%PDF"))
-        # 浏览器内置 PDF 查看器不是应用 DOM；这里验证 iframe 导航和真实 PDF 字节。
-        self.page.wait_for_function("Array.from(document.querySelectorAll('iframe')).some(f => f.contentWindow !== null)")
 
     def test_narrow_window_keeps_reading_area_usable(self):
         self.page.set_viewport_size({"width": 800, "height": 900})
@@ -180,7 +186,8 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertGreater(box["height"], 20)
 
     def configure_ai(self):
-        # 打开笔记会自动请求建议；隔离该 AI 传输边界，禁止真实模型联网。
+        self.page.route("**/api/chat/suggestions", lambda route: route.fulfill(json={"suggestions": ["问题一", "问题二", "问题三"], "source": "default"}))
+        # 隔离 AI 传输边界，禁止真实模型联网。
         self.page.route("**/api/notes/suggest", lambda route: route.fulfill(json={"suggestions": []}))
         response = self.context.request.post(self.server.url + "/api/config", data={
             "api_base": "http://127.0.0.1:1", "api_key": "ci-fixture", "model": "fixture",

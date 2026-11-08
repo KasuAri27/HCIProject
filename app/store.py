@@ -993,6 +993,9 @@ def save_last_submission(
 # 标注与阅读位置
 # ------------------------------------------------------------
 
+ANNOTATION_COLORS = {"amber", "teal", "rose"}
+
+
 def list_annotations(doc_id: str, version_id: Optional[str] = None) -> list[dict]:
     sql = "SELECT * FROM annotations WHERE document_id = ?"
     params: list = [doc_id]
@@ -1002,7 +1005,11 @@ def list_annotations(doc_id: str, version_id: Optional[str] = None) -> list[dict
     sql += " ORDER BY created_at"
     with _conn() as conn:
         rows = conn.execute(sql, params).fetchall()
-    return [dict(r) for r in rows]
+    annotations = [dict(row) for row in rows]
+    for annotation in annotations:
+        if annotation.get("color") not in ANNOTATION_COLORS:
+            annotation["color"] = "amber"
+    return annotations
 
 
 def create_annotation(
@@ -1020,6 +1027,9 @@ def create_annotation(
         raise ValueError("内容块不存在")
     if end_offset <= start_offset:
         raise ValueError("标注范围无效")
+    color = color or "amber"
+    if color not in ANNOTATION_COLORS:
+        raise ValueError("标注颜色无效")
     annotation_id = _uid()
     now = _now()
     with _conn() as conn:
@@ -1035,7 +1045,7 @@ def create_annotation(
                 int(end_offset),
                 quote,
                 note or "",
-                color or "amber",
+                color,
                 now,
                 now,
             ),
@@ -1051,6 +1061,8 @@ def update_annotation(annotation_id: str, note: Optional[str] = None, color: Opt
         fields.append("note = ?")
         params.append(note)
     if color is not None:
+        if color not in ANNOTATION_COLORS:
+            raise ValueError("标注颜色无效")
         fields.append("color = ?")
         params.append(color)
     params.append(annotation_id)

@@ -31,4 +31,7 @@ export default [{
     "constructor-super": "error",
     "valid-typeof": "error",
   },
+}, {
+  files: ["app/static/pdf-viewer.js"],
+  languageOptions: { sourceType: "module" },
 }];

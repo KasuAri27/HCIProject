@@ -271,17 +271,13 @@ class FrontendPhase3Tests(unittest.TestCase):
     def test_phase3_dom_ids_exist(self):
         html = (Path(config.APP_DIR) / "app" / "templates" / "index.html").read_text(encoding="utf-8")
         for element_id in (
-            "btn-focus",
-            "btn-help",
+            "workspace-settings",
+            "btn-avatar",
+            "btn-chat-toggle",
+            "topbar-avatar-img",
+            "topbar-avatar-initial",
             "help-modal",
             "btn-help-close",
-            "position-status",
-            "read-level",
-            "btn-read-settings",
-            "read-settings",
-            "btn-font-dec",
-            "btn-font-inc",
-            "line-height",
             "btn-mode-explain",
             "btn-mode-example",
             "btn-mode-prereq",
@@ -294,8 +290,7 @@ class FrontendPhase3Tests(unittest.TestCase):
             "btn-notes-export",
             "exercise-self-rate",
             "exercise-evidence-status",
-            "understanding-count",
-            "practice-count",
+            "last-review",
         ):
             self.assertIn(f'id="{element_id}"', html, element_id)
 
