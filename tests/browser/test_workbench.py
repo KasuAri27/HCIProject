@@ -202,6 +202,8 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertTrue(response.ok, response.text())
         self.page.reload(wait_until="networkidle")
         expect(self.page.locator("#btn-chat-send")).to_be_enabled()
+        # networkidle 早于 600ms 防抖建议请求；先确认初始化完成，避免提问主动取消它。
+        expect(self.page.locator(".chat-suggestion").first).to_have_text("问题一")
 
     def test_citation_click_returns_to_source_block(self):
         doc_id = self.upload("cite.md", "# 来源\n\n引用必须能核对到原文。".encode())
