@@ -184,4 +184,3 @@ body.focus-mode .topbar { margin-left: 0; }
 .chat-to-notes { display: inline-grid; place-items: center; width: 28px; height: 28px; margin-top: 8px; padding: 5px; color: var(--ink-3); background: transparent; border: 0; border-radius: 5px; cursor: pointer; }
 .chat-to-notes:hover { color: var(--accent); background: var(--accent-wash); }
 .chat-to-notes svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
-
