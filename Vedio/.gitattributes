@@ -1,0 +1,2 @@
+# Preserve the captured frontend bytes so source-hashes.json survives checkout.
+public/source-ui/** -text

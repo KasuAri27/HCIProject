@@ -1,0 +1,5 @@
+node_modules/
+.cache/
+output/render-bundle/
+__pycache__/
+public/audio/voice-test.mp3

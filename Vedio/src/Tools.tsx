@@ -1,0 +1,28 @@
+import React from 'react';
+import {useCurrentFrame} from 'remotion';
+import {Backdrop,Badge,Heading} from './Shared';
+import {C,ease,linear,mono} from './motion';
+
+const tabs=['函数工具','绘图工具','编程工具'];
+const code=['def derivative(f, x, h=1e-5):','    return (f(x+h) - f(x-h)) / (2*h)','','f = lambda x: x**2','print(derivative(f, 2))'];
+
+export const Tools:React.FC=()=>{
+  const f=useCurrentFrame();const tab=f<120?0:f<225?1:2;const t=tab===0?f:tab===1?f-120:f-225;
+  const amplitude=0.65+ease(t,10,112)*1.1;
+  const points=Array.from({length:181},(_,i)=>{const x=-Math.PI*2+i/180*Math.PI*4;return `${i===0?'M':'L'}${118+i/180*1040},${350-Math.sin(x)*amplitude*130}`;}).join(' ');
+  return <><Backdrop light/><Heading title="把抽象知识，变成看得见的实践。" detail="函数、绘图与编程，在学习现场继续探索。" light/><Badge>学习工具 · 概念演示</Badge>
+    <div style={{position:'absolute',left:90,top:185,width:1740,height:780,border:'1px solid #CCDCD0',borderRadius:13,background:'#FFF',overflow:'hidden',boxShadow:'0 25px 60px #153A2C1A'}}>
+      <div style={{height:75,display:'flex',alignItems:'center',gap:20,padding:'0 29px',borderBottom:'1px solid #DCE6DF',background:'#F6F9F5'}}><span style={{fontSize:24,color:C.ink,fontWeight:600,marginRight:38}}>学习工具</span>{tabs.map((s,i)=><div key={s} style={{fontSize:21,color:i===tab?'white':'#6E8477',background:i===tab?C.teal:'transparent',padding:'10px 24px',borderRadius:7}}>{s}</div>)}</div>
+      <div style={{position:'absolute',left:0,top:75,bottom:0,width:355,borderRight:'1px solid #DCE6DF',padding:'37px 30px',color:C.ink}}>
+        <div style={{fontSize:31,fontWeight:600,marginBottom:24}}>{['观察函数的变化','画出几何关系','让代码验证想法'][tab]}</div>
+        <div style={{fontSize:20,lineHeight:1.9,color:'#6B8175'}}>{['改变参数，看见曲线怎样响应。','从一个点开始，连接、作图、验证。','输入一个例子，观察运行结果。'][tab]}</div>
+        {tab===0?<><div style={{fontSize:30,fontFamily:mono,marginTop:55}}>y = a · sin(x)</div><div style={{marginTop:42,fontSize:22}}>a = {amplitude.toFixed(2)}</div><div style={{position:'relative',width:275,height:5,background:'#D5E5DA',marginTop:27,borderRadius:4}}><div style={{width:`${(amplitude-.4)/1.5*100}%`,height:5,background:C.teal}}/><div style={{position:'absolute',left:(amplitude-.4)/1.5*270,top:-8,width:21,height:21,borderRadius:'50%',background:C.teal,border:'3px solid white',boxShadow:'0 0 0 1px #9DBAA8'}}/></div><div style={{fontSize:17,color:'#82988B',marginTop:30}}>参数动画示例</div></>:tab===1?<><div style={{display:'flex',gap:13,marginTop:45}}>{['线段','圆形','标注'].map((s,i)=><div key={s} style={{border:`1px solid ${i===0?C.teal:'#CFDDD3'}`,padding:'11px 15px',fontSize:19,borderRadius:7}}>{s}</div>)}</div><div style={{marginTop:45,fontSize:23}}>三角形与外接圆</div><div style={{fontSize:18,color:'#7C9184',marginTop:20}}>连接已知条件，探索结构。</div></>:<><div style={{fontSize:22,marginTop:46}}>Python / 导数近似</div><div style={{border:'1px solid #CEDDD0',borderRadius:8,padding:20,marginTop:25,fontSize:20,lineHeight:1.8,color:'#658571'}}>对 f(x)=x²<br/>计算 x=2 处的导数。</div><div style={{marginTop:32,background:C.teal,color:'white',display:'inline-block',padding:'12px 29px',borderRadius:7,fontSize:21}}>▷ 运行示例</div></>}
+      </div>
+      <div style={{position:'absolute',left:355,top:75,width:1385,height:705}}>
+        {tab===0&&<svg width="1385" height="705"><defs><pattern id="grid" width="65" height="65" patternUnits="userSpaceOnUse"><path d="M65 0H0V65" fill="none" stroke="#E5ECE6" strokeWidth="1"/></pattern></defs><rect width="1385" height="705" fill="url(#grid)"/><path d="M80 350H1280M640 60V650" stroke="#9AB0A0" strokeWidth="2"/><path d={points} fill="none" stroke={C.teal} strokeWidth="5" strokeLinecap="round"/><circle cx={118+(t%120)/120*1040} cy={350-Math.sin(-Math.PI*2+(t%120)/120*Math.PI*4)*amplitude*130} r="9" fill={C.gold} stroke={C.teal} strokeWidth="3"/><text x="1200" y="390" fill="#6B8175" fontSize="24">x</text><text x="666" y="95" fill="#6B8175" fontSize="24">y</text><text x="91" y="80" fill={C.teal} fontSize="28">y = {amplitude.toFixed(2)} sin(x)</text></svg>}
+        {tab===1&&<svg width="1385" height="705"><defs><pattern id="dots" width="30" height="30" patternUnits="userSpaceOnUse"><circle cx="15" cy="15" r="1" fill="#D5E2D7"/></pattern></defs><rect width="1385" height="705" fill="url(#dots)"/><circle cx="685" cy="350" r="250" fill="#EDF6EF" stroke="#9DC4AF" strokeWidth="2" strokeDasharray="7 8" opacity={linear(t,30,60)}/><path d="M685 100 468.5 475 901.5 475Z" fill="none" stroke={C.teal} strokeWidth="5" pathLength="1" strokeDasharray="1" strokeDashoffset={1-ease(t,0,67)}/>{[[685,100,'A'],[468.5,475,'B'],[901.5,475,'C']].map(([x,y,s])=><g key={s}><circle cx={x} cy={y} r="8" fill={C.teal}/><text x={Number(x)+17} y={Number(y)-15} fontSize="28" fill={C.ink}>{s}</text></g>)}<path d="M685 100V475" stroke="#A7BFB1" strokeWidth="2" strokeDasharray="5 7" opacity={linear(t,50,75)}/><circle cx="685" cy="350" r="6" fill={C.gold}/><text x="730" y="600" fontSize="23" fill="#6B8175" opacity={linear(t,65,85)}>从图形，理解关系。</text></svg>}
+        {tab===2&&<div style={{height:'100%',background:'#112D32',padding:'40px 45px',fontFamily:mono}}><div style={{fontSize:17,color:'#92B5A5',marginBottom:35}}>derivative.py</div>{code.map((line,i)=><div key={i} style={{fontSize:28,lineHeight:1.9,whiteSpace:'pre',color:i===0?'#A9DCD1':i===4?'#E5C889':'#DEEEE1',opacity:linear(t,i*5,i*5+8)}}><span style={{display:'inline-block',width:60,color:'#5B8275',fontSize:22}}>{i+1}</span>{line}</div>)}<div style={{borderTop:'1px solid #52796C66',marginTop:30,paddingTop:24,opacity:linear(t,45,62)}}><div style={{fontSize:17,color:'#8DB5A3',marginBottom:14}}>示例运行结果</div><div style={{fontSize:30,color:'#B5EAC9'}}>4.000000000026205</div><div style={{fontSize:19,color:'#7EB29C',marginTop:21}}>✓ 运行完成</div></div></div>}
+      </div>
+    </div>
+  </>;
+};

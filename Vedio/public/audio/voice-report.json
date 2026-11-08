@@ -1,0 +1,82 @@
+[
+  {
+    "cue": 0,
+    "original_seconds": 4.608,
+    "used_seconds": 4.608
+  },
+  {
+    "cue": 1,
+    "original_seconds": 3.432,
+    "used_seconds": 3.432
+  },
+  {
+    "cue": 2,
+    "original_seconds": 3.648,
+    "used_seconds": 3.6
+  },
+  {
+    "cue": 3,
+    "original_seconds": 3.576,
+    "used_seconds": 3.576
+  },
+  {
+    "cue": 4,
+    "original_seconds": 3.864,
+    "used_seconds": 3.6
+  },
+  {
+    "cue": 5,
+    "original_seconds": 3.96,
+    "used_seconds": 3.6
+  },
+  {
+    "cue": 6,
+    "original_seconds": 4.248,
+    "used_seconds": 4.248
+  },
+  {
+    "cue": 7,
+    "original_seconds": 8.856,
+    "used_seconds": 8.856
+  },
+  {
+    "cue": 8,
+    "original_seconds": 7.584,
+    "used_seconds": 7.584
+  },
+  {
+    "cue": 9,
+    "original_seconds": 8.952,
+    "used_seconds": 8.952
+  },
+  {
+    "cue": 10,
+    "original_seconds": 8.976,
+    "used_seconds": 8.976
+  },
+  {
+    "cue": 11,
+    "original_seconds": 7.68,
+    "used_seconds": 7.68
+  },
+  {
+    "cue": 12,
+    "original_seconds": 7.464,
+    "used_seconds": 7.464
+  },
+  {
+    "cue": 13,
+    "original_seconds": 8.016,
+    "used_seconds": 7.5
+  },
+  {
+    "cue": 14,
+    "original_seconds": 11.04,
+    "used_seconds": 10.2
+  },
+  {
+    "cue": 15,
+    "original_seconds": 2.544,
+    "used_seconds": 2.544
+  }
+]

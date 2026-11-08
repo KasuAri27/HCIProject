@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "nodes": 52,
+  "edges": 94,
+  "states": [
+    {
+      "frame": 0,
+      "lit": 9,
+      "frontier": 11,
+      "locked": 32
+    },
+    {
+      "frame": 230,
+      "lit": 10,
+      "frontier": 12,
+      "locked": 30
+    },
+    {
+      "frame": 378,
+      "lit": 11,
+      "frontier": 12,
+      "locked": 29
+    }
+  ]
+}

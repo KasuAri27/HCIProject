@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>学习助手</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/katex/katex.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='pages.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='workspace-menu.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/pdfjs/web/pdf_viewer.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='course-workspace.css') }}">
+</head>
+<body>
+
+  <!-- 顶栏：品牌 / 当前资料 / AI 状态 / 全局操作 -->
+  <header class="topbar">
+    <button type="button" id="btn-rail-toggle" class="icon-btn" title="显示或隐藏资料柜" aria-label="资料柜">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 3.5h13v9h-13z"/><path d="M1.5 6.5h13M6 6.5v6"/></svg>
+    </button>
+<div class="workspace-global-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input id="library-search" type="search" placeholder="搜索课程、资料与正文" autocomplete="off" spellcheck="false" aria-label="搜索课程、资料与正文"></div>
+
+    <span class="grow"></span><button type="button" id="btn-source-toggle" class="workspace-source-toggle" aria-controls="reading" aria-expanded="false">原文</button>
+    <button type="button" id="btn-chat-toggle" class="icon-btn pane-toggle" title="收起 AI 侧栏" aria-label="收起 AI 侧栏" aria-expanded="true" aria-controls="rail-right">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="3.5" y="4.5" width="17" height="15" rx="3"/>
+        <path d="M14.5 4.5v15"/>
+        <path class="pane-toggle-detail" d="M17.5 8v8"/>
+      </svg>
+    </button>
+
+  </header>
+
+  <div class="job-strip" id="job-strip" hidden></div>
+
+  <div class="workbench" id="workbench">
+
+    <!-- 左栏：资料柜 -->
+    <aside class="rail rail-left" id="rail-left" aria-label="课程与资料">
+      <div class="workspace-identity">    <button type="button" id="btn-avatar" class="profile-trigger" title="打开设置" aria-label="打开设置" aria-haspopup="dialog" aria-controls="workspace-settings" aria-expanded="false">
+      <span class="topbar-avatar">
+        <img id="topbar-avatar-img" alt="" hidden>
+        <span id="topbar-avatar-initial" aria-hidden="true">读</span>
+      </span>
+    </button><span>我的学习空间</span><button type="button" class="icon-btn" id="btn-sidebar-fold" aria-label="收起课程栏"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M8 3v14"/></svg></button></div>
+      <nav class="workspace-nav" aria-label="学习导航">
+        <button type="button" class="is-current" id="btn-courses"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h5l2 1 2-1h5v12h-5l-2 1-2-1H3zM10 5v12"/></svg>课程</button>
+        <button type="button" id="btn-knowledge-sky"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2 2 6 6 2-6 2-2 6-2-6-6-2 6-2zM3 2v3M1.5 3.5h3"/></svg>知识星空图</button>
+      </nav>
+      <div class="rail-head">
+        <h2 class="rail-title">我的课程<span class="badge" id="library-count" hidden>0</span></h2><button type="button" class="icon-btn" id="btn-create-course" aria-label="创建课程" title="创建课程"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg></button>
+        <input id="import-input" type="file" accept=".md,.markdown,.txt,.docx,.pptx,.pdf" multiple hidden>
+      </div>
+      <div class="search-panel" id="search-panel" hidden>
+        <div class="search-head">
+          <span class="field-label" id="search-summary" style="margin:0">全文检索</span>
+          <button type="button" id="btn-ask-cross" class="btn btn-small btn-primary" title="用当前关键词跨资料提问">跨资料提问</button>
+        </div>
+        <div class="search-results" id="search-results"></div>
+      </div>
+      <div class="rail-alert" id="library-alert" hidden></div>
+      <div class="rail-body" id="library-tree">
+        <p class="empty">正在读取课程与资料…</p>
+      </div>
+
+    </aside>
+
+    <div class="gutter" id="gutter-left" aria-label="调整课程与原文宽度" aria-controls="rail-left reading" role="separator" aria-orientation="vertical" tabindex="0" title="拖动调整资料柜宽度"></div>
+
+    <!-- 中栏：纸面 -->
+    <main class="reading" id="reading">
+      <header class="workspace-document-head" id="workspace-document-head">
+        <div class="workspace-breadcrumb"><span>课程</span><span aria-hidden="true">›</span><span id="workspace-course-name">全部资料</span><span aria-hidden="true">›</span><span class="crumb" id="topbar-crumb" hidden></span></div>
+        <h1 id="workspace-document-title">选择一份资料，开始学习</h1>
+        <div class="workspace-document-meta"><button type="button" id="btn-source-close" class="workspace-source-close" aria-label="关闭原文">返回笔记</button><span id="workspace-document-format">阅读与思考，在同一个空间</span><span class="grow"></span><button type="button" class="icon-btn" id="btn-document-chat" aria-label="切换 AI 对话"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M12 3v14"/></svg></button></div>
+      </header>
+      <div class="version-note" id="doc-version-note" hidden></div>
+
+      <div class="doc-scroll" id="doc-scroll">
+        <div class="doc-empty" id="doc-empty"></div>
+        <div class="pdf-view" id="pdf-view" hidden>
+          <div class="pdf-shell">
+            <div class="pdf-stage">
+              <div class="pdf-viewer-container" id="pdf-viewer-container" tabindex="0" role="region" aria-label="PDF 阅读区" aria-description="左键放大，右键缩小；也可用加号、减号缩放，数字 0 恢复适应宽度">
+                <div class="pdfViewer" id="pdf-viewer"></div>
+              </div>
+              <output class="pdf-page-indicator" id="pdf-page-status" aria-label="当前页码" hidden>1 / 1</output>
+              <div class="pdf-loading" id="pdf-loading" hidden>正在加载 PDF…</div>
+            </div>
+          </div>
+        </div>
+        <article class="doc-page" id="doc-page" hidden>
+          <div class="doc-body markdown" id="doc-body"></div>
+        </article>
+      </div>
+    </main>
+
+    <div class="gutter workspace-source-rule" id="gutter-source" role="separator" aria-label="调整原文与笔记宽度" aria-controls="reading notes-rail" aria-orientation="vertical" tabindex="0" title="拖动调整原文与笔记宽度"></div>
+
+    <aside class="workspace-notes-rail" id="notes-rail" aria-label="笔记区">
+      <header class="workspace-notes-head"><h2>笔记</h2><span id="workspace-notes-file"></span></header>
+      <section class="pane is-active" id="pane-notes" role="region" aria-label="笔记">
+        <div class="pane-bar">
+          <span class="save-state" id="notes-save-status"></span>
+          <span class="pane-actions">
+            <button type="button" id="btn-notes-undo" class="btn btn-small btn-quiet" disabled>撤销</button>
+            <button type="button" id="btn-notes-export" class="btn btn-small btn-quiet" disabled>导出</button>
+            <button type="button" id="btn-notes-save" class="btn btn-small" disabled>保存笔记</button>
+          </span>
+        </div>
+        <div class="pane-scroll">
+          <p class="empty" id="notes-empty">选择一份资料</p>
+          <div id="notes-layout" hidden>
+            <textarea id="notes-content" class="notes-area" spellcheck="false" aria-label="笔记正文" placeholder="开始写笔记…"></textarea>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <div class="gutter" id="gutter-right" aria-label="调整笔记与 AI 宽度" aria-controls="notes-rail rail-right" role="separator" aria-orientation="vertical" tabindex="0" title="拖动调整 AI 对话宽度"></div>
+
+    <!-- 右栏：批注 -->
+    <aside class="rail rail-right" id="rail-right" aria-label="AI 对话栏">
+
+      <header class="workspace-chat-head"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3h14v11H8l-5 3zM6 7h8M6 10h5"/></svg><span id="workspace-chat-title">AI 对话</span><button type="button" class="icon-btn" id="btn-new-thread" aria-label="新建对话" title="新建对话"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg></button><button type="button" class="icon-btn" id="btn-close-chat" aria-label="收起 AI 对话"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M12 3v14"/></svg></button></header>
+      <!-- 对话 -->
+      <section class="pane is-active" id="pane-chat" role="region" aria-label="AI 对话">
+      <!-- 划段气泡：停靠在批注栏顶部 -->
+      <div class="bubble" id="select-bubble" hidden>
+        <div class="bubble-head">
+          <span class="bubble-title">你划选的这段</span>
+          <button type="button" class="bubble-close" id="select-bubble-close" title="关闭" aria-label="关闭">×</button>
+        </div>
+        <blockquote class="bubble-quote" id="select-bubble-quote"></blockquote>
+        <div class="bubble-modes">
+          <button type="button" id="btn-mode-explain" class="btn btn-small">解释</button>
+          <button type="button" id="btn-mode-example" class="btn btn-small">举例</button>
+          <button type="button" id="btn-mode-prereq" class="btn btn-small">补前置</button>
+          <button type="button" id="btn-mode-check" class="btn btn-small">理解检查</button>
+        </div>
+        <textarea id="select-bubble-input" rows="2" spellcheck="false" placeholder="想问什么？留空就是「讲这段」"></textarea>
+        <div class="bubble-actions">
+          <button type="button" id="btn-spot-ask" class="btn btn-small btn-primary">现场问</button>
+          <button type="button" id="btn-throw-chat" class="btn btn-small">放进对话</button>
+          <button type="button" id="btn-quote-note" class="btn btn-small btn-quiet">记进笔记</button>
+        </div>
+        <div class="bubble-answer markdown" id="select-bubble-answer" hidden></div>
+        <div class="check-box" id="check-answer-wrap" hidden>
+          <textarea id="check-answer" rows="2" placeholder="写下你的理解，提交后由 AI 检查"></textarea>
+          <button type="button" id="btn-check-submit" class="btn btn-small btn-primary">提交检查</button>
+        </div>
+        <div class="check-feedback markdown" id="check-feedback" hidden></div>
+        <div class="self-rate" id="check-self-rate" hidden>
+          <span>你的理解自评：</span>
+          <button type="button" class="btn btn-small" data-level="理解">理解</button>
+          <button type="button" class="btn btn-small" data-level="模糊">模糊</button>
+          <button type="button" class="btn btn-small" data-level="不会">不会</button>
+        </div>
+      </div>
+
+
+        <div class="pane-scroll" id="chat-messages"></div>
+        <div class="chat-suggestions" id="chat-suggestions" role="group" aria-label="建议提问"></div>
+        <div class="composer">
+          <div class="workspace-chat-context" id="workspace-chat-context" hidden></div>
+          <textarea id="chat-input" rows="2" spellcheck="false" placeholder="有疑惑？" aria-label="有疑惑？"></textarea>
+          <button type="button" id="btn-chat-send" class="btn btn-primary" disabled>发送</button>
+        </div>
+      </section>
+
+
+    </aside>
+  </div>
+
+  <dialog class="workspace-course-dialog" id="course-dialog" aria-labelledby="course-dialog-title">
+    <header><h2 id="course-dialog-title">创建课程</h2><button type="button" class="icon-btn" id="btn-course-cancel" aria-label="关闭创建课程">×</button></header>
+    <form id="course-form"><label for="course-title">课程名称</label><input id="course-title" required maxlength="80" autocomplete="off" placeholder="例如：机器学习"><p class="workspace-form-error" id="course-form-error" role="alert" hidden></p><div class="workspace-form-actions"><button type="submit" class="btn btn-primary" id="btn-course-submit">创建课程</button></div></form>
+  </dialog>
+  <dialog class="workspace-course-dialog" id="knowledge-dialog" aria-labelledby="knowledge-title"><header><h2 id="knowledge-title">知识星空图</h2><button type="button" class="icon-btn" id="btn-knowledge-close" aria-label="关闭知识星空图">×</button></header><p class="workspace-coming-soon">把课程、概念与资料连成星空。这个空间将在后续开放。</p></dialog>
+
+  <dialog class="workspace-settings" id="workspace-settings" aria-labelledby="workspace-settings-title">
+    <header class="workspace-settings-head">
+      <h2 id="workspace-settings-title">工作台设置</h2>
+      <button type="button" class="icon-btn" id="btn-settings-close" aria-label="关闭设置"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10M15 5 5 15"/></svg></button>
+    </header>
+    <div class="workspace-settings-body">
+      <nav class="workspace-settings-nav" aria-label="设置板块">
+        <button type="button" data-settings-section="user" aria-pressed="true">个人</button>
+        <button type="button" data-settings-section="api" aria-pressed="false">API 配置</button>
+        <button type="button" data-settings-section="reading" aria-pressed="false">阅读</button>
+        <button type="button" data-settings-section="data" aria-pressed="false">学习数据</button>
+        <button type="button" data-settings-section="shortcuts" aria-pressed="false">快捷键</button>
+        <button type="button" data-settings-section="about" aria-pressed="false">关于</button>
+      </nav>
+      <div class="workspace-settings-content">
+        <section class="workspace-section" id="settings-user" aria-labelledby="settings-user-title">
+          <header class="settings-head"><h2 id="settings-user-title" tabindex="-1">读者档案</h2></header>
+          {% include "user.html" %}
+        </section>
+        <section class="workspace-section" id="settings-api" aria-labelledby="settings-api-title" hidden>
+          {% include "api_config.html" %}
+        </section>
+        {% include "_settings_sections.html" %}
+      </div>
+    </div>
+    <div class="page-toast" id="page-toast" role="status" hidden></div>
+  </dialog>
+
+  <!-- 通用确认 -->
+  <div class="modal-mask" id="confirm-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+      <h3 id="confirm-modal-title">确认</h3>
+      <p id="confirm-modal-body"></p>
+      <div class="modal-actions">
+        <button type="button" id="btn-confirm-cancel" class="btn btn-quiet">取消</button>
+        <button type="button" id="btn-confirm-ok" class="btn btn-primary">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- API 设置 -->
+
+
+  <div class="modal-mask" id="help-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="help-title">
+      <h3 id="help-title">快捷键</h3>
+      <ul class="shortcut-list">
+        <li><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 发送对话</li>
+        <li><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> 切换专注阅读</li>
+        <li><kbd>←</kbd> / <kbd>→</kbd> 切换批注标签（标签聚焦时）</li>
+        <li><kbd>Esc</kbd> 关闭气泡、弹窗或退出专注</li>
+        <li><kbd>?</kbd> 打开本帮助（不在输入框内时）</li>
+      </ul>
+      <div class="modal-actions">
+        <button type="button" id="btn-help-close" class="btn btn-primary">知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="{{ url_for('static', filename='vendor/katex/katex.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='vendor/katex/auto-render.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-common.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-settings.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-user.js') }}"></script>
+  <script src="{{ url_for('static', filename='page-api.js') }}"></script>
+  <script src="{{ url_for('static', filename='workspace-menu.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+{
+  "viewport": [
+    1760,
+    840
+  ],
+  "boxes": {
+    "#rail-left": {
+      "x": 0,
+      "y": 0,
+      "width": 281.59375,
+      "height": 840
+    },
+    "#reading": {
+      "x": 282.59375,
+      "y": 56,
+      "width": 880,
+      "height": 784
+    },
+    "#notes-rail": {
+      "x": 1163.59375,
+      "y": 56,
+      "width": 296.21875,
+      "height": 784
+    },
+    "#rail-right": {
+      "x": 1460.8125,
+      "y": 56,
+      "width": 299.1875,
+      "height": 784
+    },
+    "#doc-body": {
+      "x": 343.59375,
+      "y": 257.4375,
+      "width": 758,
+      "height": 1010.078125
+    },
+    "#notes-content": {
+      "x": 1185.59375,
+      "y": 172.59375,
+      "width": 252.21875,
+      "height": 627.40625
+    },
+    "#chat-input": {
+      "x": 1486.8125,
+      "y": 767.625,
+      "width": 189.1875,
+      "height": 46.375
+    },
+    "#select-bubble": {
+      "x": 1460.8125,
+      "y": 104,
+      "width": 299.1875,
+      "height": 414.71875
+    }
+  },
+  "browser_errors": [],
+  "api_calls": [
+    {
+      "method": "GET",
+      "path": "/api/profile"
+    },
+    {
+      "method": "GET",
+      "path": "/api/session"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library"
+    },
+    {
+      "method": "GET",
+      "path": "/api/documents/doc-0"
+    },
+    {
+      "method": "GET",
+      "path": "/api/notes"
+    },
+    {
+      "method": "GET",
+      "path": "/api/chat"
+    },
+    {
+      "method": "GET",
+      "path": "/api/session"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat/suggestions"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library"
+    },
+    {
+      "method": "POST",
+      "path": "/api/documents/doc-0/position"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat/suggestions"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat/suggestions"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat/spot"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/notes"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/notes"
+    },
+    {
+      "method": "POST",
+      "path": "/api/chat/suggestions"
+    }
+  ],
+  "fixture": "in-memory sample responses; no real model invocation"
+}
