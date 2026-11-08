@@ -148,7 +148,9 @@ class NotesComposerTests(unittest.TestCase):
         expect(self.page.locator("#notes-generation-status")).to_contain_text("已生成")
         expect(self.page.locator("#notes-draft-body")).to_contain_text("按相关性加权")
         expect(self.page.locator("#notes-content")).to_have_value("我的原有笔记")
-        self.page.locator("#btn-notes-draft-apply").click()
+        # 编辑框先更新，持久化随后完成；等待真正的保存响应再从数据库验收。
+        with self.page.expect_response(lambda r: r.url.endswith("/api/notes") and r.request.method == "PUT"):
+            self.page.locator("#btn-notes-draft-apply").click()
         expect(self.page.locator("#notes-content")).to_have_value("我的原有笔记\n\n---\n\n## 新草稿\n\n按相关性加权。")
         saved = self.context.request.get(f"{self.server.url}/api/notes?doc_id={self.doc_id}").json()
         self.assertIn("按相关性加权", saved["content"])
