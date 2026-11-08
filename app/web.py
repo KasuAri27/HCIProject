@@ -135,6 +135,8 @@ def _library_payload() -> dict:
     ]
     return {
         "documents": documents,
+        "courses": store.list_courses(),
+        "threads": store.list_threads(),
         "overview": store.overview(),
         "library": {
             "path": status.get("path") or "",
@@ -172,6 +174,7 @@ def _session_payload() -> dict:
     )
     return {
         "selected_document": selected,
+        "selected_thread_id": store.selected_thread(doc_id) if doc_id else None,
         "exercise": exercise,
         "last_submission": last,
         "overview": store.overview(),
@@ -253,7 +256,12 @@ def api_import():
     if uploaded is None or not uploaded.filename:
         return jsonify({"error": "缺少文件"}), 400
     try:
+        course_id = (request.form.get("course_id") or "").strip()
+        if course_id and store.get_course(course_id) is None:
+            return jsonify({"error": "课程不存在"}), 400
         result = imports.import_upload(uploaded)
+        if course_id:
+            store.link_course_document(course_id, result["document_id"])
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     return jsonify({"ok": True, **result, "library": _library_payload()})
@@ -538,12 +546,69 @@ def api_annotation(annotation_id: str):
 # 对话 / 笔记
 # ------------------------------------------------------------
 
+@app.route("/api/courses", methods=["GET", "POST"])
+def api_courses():
+    if request.method == "GET":
+        return jsonify({"courses": store.list_courses()})
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get("title"), str):
+        return jsonify({"error": "请填写课程名称"}), 400
+    try:
+        course = store.create_course(data["title"])
+        return jsonify({"course": course, "library": _library_payload()})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/courses/<course_id>/documents", methods=["POST"])
+def api_course_document(course_id: str):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get("doc_id"), str):
+        return jsonify({"error": "缺少 doc_id"}), 400
+    try:
+        store.link_course_document(course_id, data["doc_id"])
+        return jsonify({"library": _library_payload()})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/threads", methods=["GET", "POST"])
+def api_threads():
+    if request.method == "GET":
+        doc_id = request.args.get("doc_id", "")
+        if not doc_id or store.get_document(doc_id) is None:
+            return jsonify({"error": "资料不存在"}), 400
+        return jsonify({"threads": store.list_threads(doc_id)})
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get("doc_id"), str) or not isinstance(data.get("title", ""), str):
+        return jsonify({"error": "请指定资料与对话名称"}), 400
+    try:
+        thread = store.create_thread(data["doc_id"], data.get("title") or "新对话")
+        store.select_thread(data["doc_id"], thread["id"])
+        return jsonify({"thread": thread, "library": _library_payload()})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/threads/<thread_id>/open", methods=["POST"])
+def api_open_thread(thread_id: str):
+    thread = store.get_thread(thread_id)
+    if thread is None:
+        return jsonify({"error": "对话不存在"}), 404
+    store.select_thread(thread["document_id"], thread_id)
+    store.set_selected_document_id(thread["document_id"])
+    return jsonify({**chapter_chat.get(thread["document_id"], thread_id), "thread": thread})
+
+
 @app.route("/api/chat", methods=["GET"])
 def api_chat_get():
     doc_id = (request.args.get("doc_id") or "").strip()
     if not doc_id:
         return jsonify({"error": "缺少 doc_id"}), 400
-    return jsonify(chapter_chat.get(doc_id))
+    try:
+        return jsonify(chapter_chat.get(doc_id, request.args.get("thread_id") or None))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.route("/api/chat", methods=["POST"])
@@ -558,6 +623,7 @@ def api_chat_post():
             parsed["question"],
             parsed["quote"],
             parsed["block_id"],
+            parsed.get("thread_id"),
         )
     except (ValueError, llm.LLMError) as exc:
         return _llm_error(exc)
@@ -576,6 +642,7 @@ def api_chat_spot():
             parsed["question"],
             parsed["quote"],
             parsed["block_id"],
+            parsed.get("thread_id"),
         )
     except (ValueError, llm.LLMError) as exc:
         return _llm_error(exc)
@@ -587,16 +654,19 @@ def api_chat_suggestions():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"error": "请求体必须是 JSON 对象"}), 400
-    for key in ("doc_id", "quote", "block_id"):
+    for key in ("doc_id", "quote", "block_id", "thread_id"):
         if not isinstance(data.get(key, ""), str):
             return jsonify({"error": f"{key} 必须是字符串"}), 400
     page = data.get("page", 0)
     if type(page) is not int or not 0 <= page <= 1_000_000:
         return jsonify({"error": "page 必须是非负整数"}), 400
     try:
+        if data.get("thread_id"):
+            store.resolve_thread(data.get("doc_id", ""), data["thread_id"])
         return jsonify(chat_suggestions.suggest(
             data.get("doc_id", "").strip(), data.get("quote", "")[:2000],
             data.get("block_id", "").strip(), page,
+            data.get("thread_id") or None,
         ))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -631,7 +701,7 @@ def api_notes_suggest():
     if err:
         return jsonify({"error": err}), 400
     try:
-        result = notes.suggest(parsed["doc_id"], parsed.get("quote") or "")
+        result = notes.suggest(parsed["doc_id"], parsed.get("quote") or "", parsed.get("thread_id"))
     except (ValueError, llm.LLMError) as exc:
         return _llm_error(exc)
     return jsonify(result)
@@ -644,7 +714,7 @@ def api_notes_draft():
         return jsonify({"error": err}), 400
     if request.get_json().get("stream") is True:
         def generate():
-            chunks = notes.draft_stream(parsed["doc_id"], parsed.get("instruction") or "", parsed.get("quote") or "")
+            chunks = notes.draft_stream(parsed["doc_id"], parsed.get("instruction") or "", parsed.get("quote") or "", parsed.get("thread_id"))
             try:
                 yield 'data: {"started":true}\n\n'
                 for text in chunks:
@@ -660,6 +730,7 @@ def api_notes_draft():
             parsed["doc_id"],
             parsed.get("instruction") or "",
             parsed.get("quote") or "",
+            parsed.get("thread_id"),
         )
     except (ValueError, llm.LLMError) as exc:
         return _llm_error(exc)

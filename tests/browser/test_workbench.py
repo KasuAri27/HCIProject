@@ -106,12 +106,17 @@ class WorkbenchBrowserTests(unittest.TestCase):
         else:
             self.fail("真实后台导入超时")
         expect(self.page.locator(f'.file[data-doc-id="{doc_id}"]')).to_be_attached()
-        self.open_document(doc_id)
+        # 导入会自动打开首份资料，等待该流程完成，避免与窄屏抽屉自动收起竞争。
+        expect(self.page.locator("#rail-left")).not_to_have_class(re.compile(r"\bis-importing\b"))
+        expect(self.page.locator("#job-strip")).to_be_hidden()
+        expect(self.page.locator(f'.file[data-doc-id="{doc_id}"]')).to_have_class("file is-active")
+        expect(self.page.locator("#notes-content")).to_be_enabled()
         return doc_id
 
     def open_document(self, doc_id):
         row = self.page.locator(f'.file[data-doc-id="{doc_id}"]')
-        if "rail-left-open" not in (self.page.locator("body").get_attribute("class") or "").split():
+        classes = (self.page.locator("body").get_attribute("class") or "").split()
+        if (self.page.viewport_size["width"] <= 1200 and "rail-left-open" not in classes) or "library-closed" in classes:
             self.page.locator("#btn-rail-toggle").click()
         row.click()
         expect(self.page.locator("#topbar-crumb")).to_be_attached()
@@ -135,16 +140,16 @@ class WorkbenchBrowserTests(unittest.TestCase):
         first = self.upload("first.md", "# 第一份资料\n\n注意力按权重聚合。".encode())
         expect(self.page.locator("#doc-body")).to_be_visible()
         expect(self.page.locator("#doc-body")).to_contain_text("注意力按权重聚合")
-        self.page.locator("#tab-notes").click()
+        self.page.locator("#notes-content").focus()
         self.page.locator("#notes-content").fill("只属于第一份资料的笔记")
         self.page.locator("#btn-notes-save").click()
         expect(self.page.locator("#notes-save-status")).to_contain_text("已保存")
         self.page.reload(wait_until="networkidle")
-        self.page.locator("#tab-notes").click()
+        self.page.locator("#notes-content").focus()
         expect(self.page.locator("#notes-content")).to_have_value("只属于第一份资料的笔记")
         second = self.upload("second.txt", "另一份资料的正文".encode())
         self.assertNotEqual(first, second)
-        self.page.locator("#tab-notes").click()
+        self.page.locator("#notes-content").focus()
         expect(self.page.locator("#notes-content")).to_have_value("")
         self.open_document(first)
         expect(self.page.locator("#notes-content")).to_have_value("只属于第一份资料的笔记")
@@ -178,6 +183,8 @@ class WorkbenchBrowserTests(unittest.TestCase):
     def test_narrow_window_keeps_reading_area_usable(self):
         self.page.set_viewport_size({"width": 800, "height": 900})
         self.upload("narrow.md", "# 窄窗口资料\n\n正文不能被侧栏挤成零宽。".encode())
+        self.page.locator("#btn-source-toggle").click()
+        expect(self.page.locator("#pane-notes")).to_be_attached()
         body = self.page.locator("#doc-body")
         expect(body).to_be_visible()
         box = body.bounding_box()
@@ -195,6 +202,8 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.assertTrue(response.ok, response.text())
         self.page.reload(wait_until="networkidle")
         expect(self.page.locator("#btn-chat-send")).to_be_enabled()
+        # networkidle 早于 600ms 防抖建议请求；先确认初始化完成，避免提问主动取消它。
+        expect(self.page.locator(".chat-suggestion").first).to_have_text("问题一")
 
     def test_citation_click_returns_to_source_block(self):
         doc_id = self.upload("cite.md", "# 来源\n\n引用必须能核对到原文。".encode())
@@ -220,7 +229,7 @@ class WorkbenchBrowserTests(unittest.TestCase):
         self.page.locator("#btn-chat-send").click()
         expect(self.page.locator("#toast")).to_contain_text("CI 模拟服务不可用")
         expect(self.page.locator("#doc-body")).to_contain_text("AI 失败也不能阻塞")
-        self.page.locator("#tab-notes").click()
+        self.page.locator("#notes-content").focus()
         self.page.locator("#notes-content").fill("失败后仍然能保存")
         self.page.locator("#btn-notes-save").click()
         expect(self.page.locator("#notes-save-status")).to_contain_text("已保存")

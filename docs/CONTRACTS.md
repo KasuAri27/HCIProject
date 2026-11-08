@@ -66,3 +66,22 @@ data: {"done":true}
 - learning:pdf-page 事件的 detail.page 为页码；阅读设置、档案、API 配置等 learning:* 事件及 localStorage 键也是跨模块约定，改动前需检查发送方、接收方与旧数据兼容。
 - 文档切换必须隔离笔记、对话和异步响应；不得将旧文档响应覆盖到新文档。此项是目标约定，现有迟到响应问题仍需修复，不能视为已获测试保证。
 - 关键契约测试分布在 test_phase2/3/4、test_api_providers、test_chat_suggestions、test_notes_stream 与浏览器测试中。现有测试并非完整契约证明；变更前定位对应断言，禁止为通过检查而擅自放宽契约。
+
+
+## 2026-11-07：课程工作台扩展（用户已授权）
+
+| 接口 | 契约 |
+|---|---|
+| GET /api/courses | 返回 `courses`，各课程含 `id/title/created_at/document_ids` |
+| POST /api/courses | JSON `title`，去除两端空白后 1～80 字；返回 `course/library`，无效输入 400 |
+| POST /api/courses/<course_id>/documents | JSON `doc_id`，关联已有文件；同一关联重复提交不复制，课程或文件不存在返回 400 |
+| POST /api/import | 既有上传增加可选 multipart `course_id`；先验证课程，再导入并关联，重复内容继续返回同一文档 ID |
+| GET /api/threads?doc_id=... | 返回该文件的 `threads`，含标题、文档 ID、时间和 `message_count` |
+| POST /api/threads | JSON `doc_id`，可选 `title`（最多 80 字，默认“新对话”）；返回 `thread/library` |
+| POST /api/threads/<thread_id>/open | 选择该会话和文件，返回 `thread/thread_id/doc_id/title/messages`；不存在返回 404 |
+
+- `GET /api/library` 新增 `courses`、`threads`，保留既有字段；`GET /api/session` 新增 `selected_thread_id`，仍按现有字段表示当前文档。
+- `GET /api/chat` 和 `POST /api/chat` 增加可选 `thread_id`。不传继续使用旧客户端的默认会话；传入则必须属于 `doc_id`，不匹配返回 400，模型不得被调用。
+- 现场问、建议提问、笔记建议和笔记草稿同样接受可选 `thread_id`，只读取该会话历史。笔记仍按文档保存，生成草稿依旧不自动持久化。
+- 新会话默认标题在首个成功问题后更新为问题前 40 字；已有标题和迁移后的“历史对话”标题不变。
+- 前端异步对话结果同时核对文件和会话，旧请求可保存在原会话，但不得覆盖新会话画面或清空新输入。知识星空图本轮只保留入口，不提供图数据 API。

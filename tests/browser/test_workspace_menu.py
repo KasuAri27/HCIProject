@@ -34,7 +34,16 @@ class WorkspaceMenuTests(unittest.TestCase):
     def tearDown(self):
         self.assertEqual(self.errors, [])
 
+    def show_avatar(self):
+        classes = (self.page.locator("body").get_attribute("class") or "").split()
+        # 视口改变时 CSS 抽屉仍可能在过渡，按导航状态操作真实开关。
+        if self.page.viewport_size["width"] <= 1200 and "rail-left-open" not in classes:
+            self.page.locator("#btn-rail-toggle").click()
+        elif self.page.viewport_size["width"] > 1200 and "library-closed" in classes:
+            self.page.locator("#btn-rail-toggle").click()
+
     def open_settings(self, section="reading"):
+        self.show_avatar()
         if not self.page.locator("#workspace-settings").is_visible():
             self.page.locator("#btn-avatar").click()
         self.page.locator(f'.workspace-settings-nav [data-settings-section="{section}"]').click()
@@ -89,6 +98,7 @@ class WorkspaceMenuTests(unittest.TestCase):
         artifacts.mkdir(parents=True, exist_ok=True)
         for width in (1440, 1280, 390):
             self.page.set_viewport_size({"width": width, "height": 900})
+            self.show_avatar()
             self.page.locator("#btn-avatar").click()
             self.page.screenshot(path=str(artifacts / f"dialog-{width}.png"))
             self.page.keyboard.press("Escape")
@@ -118,15 +128,16 @@ class WorkspaceMenuTests(unittest.TestCase):
         expect(toggle).to_have_attribute("aria-expanded", "true")
         toggle.click()
         expect(toggle).to_have_attribute("aria-label", "展开 AI 侧栏")
-        expect(self.page.locator("#rail-right")).not_to_be_visible()
+        expect(self.page.locator("#pane-chat")).not_to_be_visible()
+        expect(self.page.locator("#pane-notes")).to_be_visible()
         toggle.click()
         expect(toggle).to_have_attribute("aria-expanded", "true")
         self.page.set_viewport_size({"width": 390, "height": 844})
-        expect(toggle).to_have_attribute("aria-expanded", "false")
-        toggle.click()
         expect(toggle).to_have_attribute("aria-expanded", "true")
-        self.page.locator("body").click(position={"x": 5, "y": 200})
+        expect(self.page.locator("#pane-notes")).to_be_visible()
+        toggle.click()
         expect(toggle).to_have_attribute("aria-expanded", "false")
+        expect(self.page.locator("#pane-notes")).to_be_visible()
 
     def test_profile_and_provider_forms_work_without_reloading_reader(self):
         self.page.locator("#chat-input").fill("还没有发送的问题")
@@ -172,12 +183,14 @@ class WorkspaceMenuTests(unittest.TestCase):
                 "buffer": "# 设置回归资料\n\n这份资料用于隔离环境的设置验证。".encode(),
             })
         doc_id = uploaded.value.json()["document_id"]
-        self.page.locator("#btn-rail-toggle").click()
+        if self.page.viewport_size["width"] <= 1200:
+            self.page.locator("#btn-rail-toggle").click()
         self.page.locator(f'.file[data-doc-id="{doc_id}"]').click()
         expect(self.page.locator("#doc-body")).to_contain_text("设置回归资料", timeout=20000)
-        self.page.locator("#btn-rail-toggle").click()
+        if self.page.viewport_size["width"] <= 1200 and "rail-left-open" in (self.page.locator("body").get_attribute("class") or ""):
+            self.page.locator("#btn-sidebar-fold").click()
         expect(self.page.locator("#job-strip")).to_be_hidden(timeout=10000)
-        self.page.locator("#tab-notes").click()
+        self.page.locator("#notes-content").focus()
         self.page.locator("#notes-content").fill("待清空的隔离测试笔记")
         with self.page.expect_response(lambda r: r.url.endswith("/api/notes") and r.request.method == "PUT"):
             self.page.locator("#btn-notes-save").click()

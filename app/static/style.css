@@ -2516,20 +2516,3 @@ body.rail-right-closed #gutter-right {
   height: 20px;
   stroke-width: 1.8;
 }
-
-/* 顶栏操作：状态只落在侧栏开关上，个人入口保持安静。 */
-.topbar .pane-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  color: var(--ink-2);
-  background: transparent;
-  border-radius: 7px;
-}
-.topbar .pane-toggle:hover { background: var(--panel-2); }
-.topbar .pane-toggle.is-active { color: var(--accent); background: var(--accent-wash); }
-.topbar .pane-toggle svg { width: 21px; height: 21px; stroke-width: 1.6; }
-.pane-toggle-detail { opacity: 0; }
-.pane-toggle.is-active .pane-toggle-detail { opacity: 0.55; }

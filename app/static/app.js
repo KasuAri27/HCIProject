@@ -16,6 +16,13 @@ let currentPdfUrl = "";
 let selectedDocId = "";
 
 let chatMessages = [];
+let activeThreadId = null;
+let chatLoadSequence = 0;
+let threadOpenSequence = 0;
+let activeCourseId = "";
+const threadByDocument = new Map();
+const collapsedCourses = new Set();
+let importCourseId = "";
 let chatSending = false;
 let suggestionsTimer = null;
 let suggestionsSequence = 0;
@@ -26,20 +33,13 @@ let notesDocId = "";
 let notesTitle = "";
 let notesContent = "";
 let notesDirty = false;
-let notesSuggestions = [];
-let notesDraftText = "";
-let notesDraftRequest = null;
-let notesAutoSuggestDoc = "";
 let notesSaveTimer = null;
 let notesSaving = false;
+let notesSaveInFlight = null;
 
-let questionCache = "";
-let exerciseDocId = "";
-let lastSubmission = null;
 
 let selection = null;
 let spotBubbleLoading = false;
-let activeTab = "chat";
 let railLeftPinned = false;
 let pdfShellPromise = null;
 
@@ -79,7 +79,6 @@ let notesLastValue = "";
 let checkQuestion = "";
 let checkSelection = null;
 let checkId = "";
-let lastExerciseEvidenceId = "";
 let readFontSize = 17;
 let readLineHeight = 1.85;
 
@@ -119,6 +118,7 @@ const searchResults = $("search-results");
 const btnAskCross = $("btn-ask-cross");
 const gutterLeft = $("gutter-left");
 const gutterRight = $("gutter-right");
+const gutterSource = $("gutter-source");
 
 const docVersionNote = $("doc-version-note");
 const docScroll = $("doc-scroll");
@@ -145,11 +145,6 @@ const btnCheckSubmit = $("btn-check-submit");
 const checkFeedback = $("check-feedback");
 const checkSelfRate = $("check-self-rate");
 
-const tabButtons = Array.from(document.querySelectorAll(".tab"));
-const tabInk = $("tab-ink");
-const badgeChat = $("badge-chat");
-const dotNotes = $("dot-notes");
-const dotExercise = $("dot-exercise");
 const chatMessagesEl = $("chat-messages");
 const chatSuggestionsEl = $("chat-suggestions");
 const chatInput = $("chat-input");
@@ -161,27 +156,6 @@ const btnNotesSave = $("btn-notes-save");
 const btnNotesUndo = $("btn-notes-undo");
 const btnNotesExport = $("btn-notes-export");
 const notesContentEl = $("notes-content");
-const notesInstruction = $("notes-instruction");
-const btnNotesDraft = $("btn-notes-draft");
-const notesDraftWrap = $("notes-draft-wrap");
-const notesDraftBody = $("notes-draft-body");
-const notesDraftReplace = $("notes-draft-replace");
-const btnNotesDraftApply = $("btn-notes-draft-apply");
-const btnNotesDraftDiscard = $("btn-notes-draft-discard");
-const notesGenerationStatus = $("notes-generation-status");
-const notesDraftHeading = $("notes-draft-heading");
-const btnNotesRefreshSuggest = $("btn-notes-refresh-suggest");
-const notesSuggestionsList = $("notes-suggestions-list");
-const btnExercise = $("btn-exercise");
-const exerciseDifficulty = $("exercise-difficulty");
-const exerciseQuestion = $("exercise-question");
-const codeEditor = $("code-editor");
-const btnSubmit = $("btn-submit");
-const exerciseReview = $("exercise-review");
-const btnExerciseNext = $("btn-exercise-next");
-const exerciseSelfRate = $("exercise-self-rate");
-const exerciseEvidenceStatus = $("exercise-evidence-status");
-const lastReview = $("last-review");
 
 const confirmModal = $("confirm-modal");
 const confirmModalTitle = $("confirm-modal-title");
@@ -256,6 +230,8 @@ function currentDocId() {
   return (currentDoc && currentDoc.id) || selectedDocId || "";
 }
 
+function isLibraryDrawer() { return window.matchMedia("(max-width: 1200px)").matches; }
+
 function isNarrow() {
   return window.matchMedia("(max-width: 900px)").matches;
 }
@@ -263,54 +239,20 @@ function isNarrow() {
 // ------------------------------------------------------------
 // 标签 & 侧栏抽屉
 // ------------------------------------------------------------
-function moveTabInk() {
-  const active = tabButtons.find((b) => b.classList.contains("is-active"));
-  if (!active) return;
-  tabInk.style.left = `${active.offsetLeft}px`;
-  tabInk.style.width = `${active.offsetWidth}px`;
-}
-
 function switchTab(name) {
-  activeTab = name;
-  tabButtons.forEach((btn) => {
-    const on = btn.dataset.pane === `pane-${name}`;
-    btn.classList.toggle("is-active", on);
-    btn.setAttribute("aria-selected", on ? "true" : "false");
-    const pane = $(btn.dataset.pane);
-    if (pane) {
-      pane.classList.toggle("is-active", on);
-      pane.hidden = !on;
-    }
-  });
-  moveTabInk();
-  if (name === "notes") onNotesTabShown();
+  if (name === "notes" && !notesContentEl.disabled) notesContentEl.focus();
 }
-
-tabButtons.forEach((btn) => {
-  btn.addEventListener("click", () => switchTab(btn.dataset.pane.replace("pane-", "")));
-  btn.addEventListener("keydown", (e) => {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    e.preventDefault();
-    const index = tabButtons.indexOf(btn);
-    const next = e.key === "ArrowRight" ? index + 1 : index - 1;
-    const target = tabButtons[(next + tabButtons.length) % tabButtons.length];
-    target.focus();
-    switchTab(target.dataset.pane.replace("pane-", ""));
-  });
-});
 
 function syncScrim() {
   document.body.classList.toggle(
     "has-scrim",
-    document.body.classList.contains("rail-left-open") ||
+    (isLibraryDrawer() && document.body.classList.contains("rail-left-open")) ||
       document.body.classList.contains("rail-right-open")
   );
 }
 
 function railRightOpen() {
-  return isNarrow()
-    ? document.body.classList.contains("rail-right-open")
-    : !document.body.classList.contains("rail-right-closed");
+  return !document.body.classList.contains("rail-right-closed");
 }
 
 function syncChatToggle() {
@@ -330,19 +272,33 @@ function setLeftRail(open, pinned = false) {
   syncScrim();
 }
 
-function setRightRail(open) {
-  if (isNarrow()) {
-    document.body.classList.toggle("rail-right-open", open);
-    document.body.classList.remove("rail-right-closed");
-  } else {
-    document.body.classList.toggle("rail-right-closed", !open);
-    document.body.classList.remove("rail-right-open");
+let chatSlideTimer = null;
+function setRightRail(open, animate = true) {
+  const changed = open !== railRightOpen();
+  clearTimeout(chatSlideTimer);
+  const moving = changed && animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.body.classList.toggle("chat-sliding", moving);
+  if (moving) {
+    // 先让浏览器记录起始网格，分栏宽度和右侧抽屉才能同步过渡。
+    $("workbench").getBoundingClientRect();
+    chatSlideTimer = setTimeout(() => document.body.classList.remove("chat-sliding"), 280);
   }
+  if (!open && railRight.contains(document.activeElement)) btnChatToggle.focus();
+  railRight.inert = !open;
+  railRight.setAttribute("aria-hidden", String(!open));
+  railRight.dataset.slideState = open ? "open" : "closed";
+  document.body.classList.toggle("rail-right-closed", !open);
+  document.body.classList.remove("rail-right-open");
   syncChatToggle();
-  syncScrim();
+  applyWorkspaceWidths();
 }
 
 btnRailToggle.addEventListener("click", () => {
+  if (!isLibraryDrawer()) {
+    document.body.classList.toggle("library-closed");
+    applyWorkspaceWidths();
+    return;
+  }
   if (
     document.body.classList.contains("rail-left-open") &&
     !railLeftPinned
@@ -353,24 +309,23 @@ btnRailToggle.addEventListener("click", () => {
   const open = !document.body.classList.contains("rail-left-open");
   setLeftRail(open, open);
 });
-btnRailToggle.addEventListener("mouseenter", () => {
-  if (!document.body.classList.contains("rail-left-open")) {
-    setLeftRail(true, false);
-  }
-});
 railLeft.addEventListener("mouseleave", (event) => {
+  if (!isLibraryDrawer()) return;
   if (railLeftPinned) return;
   if (event.relatedTarget && railLeft.contains(event.relatedTarget)) return;
   setLeftRail(false, false);
 });
 document.addEventListener("click", (event) => {
-  if (!document.body.classList.contains("rail-left-open")) return;
+  if (event.target.closest("dialog, .modal-mask")) return;
+  if (!isLibraryDrawer() || !document.body.classList.contains("rail-left-open")) return;
   if (railLeft.contains(event.target) || btnRailToggle.contains(event.target)) return;
   setLeftRail(false, false);
 });
 
-btnChatToggle.addEventListener("click", () => setRightRail(!railRightOpen()));
+function toggleWorkspaceChat() { setRightRail(!railRightOpen()); }
+btnChatToggle.addEventListener("click", toggleWorkspaceChat);
 document.addEventListener("click", (event) => {
+  if (event.target.closest("dialog, .modal-mask")) return;
   if (!document.body.classList.contains("rail-right-open")) return;
   if (railRight.contains(event.target) || btnChatToggle.contains(event.target)) return;
   document.body.classList.remove("rail-right-open");
@@ -386,50 +341,98 @@ syncChatToggle();
 // ------------------------------------------------------------
 // 可拖拽分栏
 // ------------------------------------------------------------
-function bindGutter(gutter, rail, side, storageKey, min, max) {
-  if (!gutter || !rail) return;
-  const apply = (px) => {
-    const value = Math.max(min, Math.min(max, px));
-    document.documentElement.style.setProperty(
-      side === "left" ? "--rail-l" : "--rail-r",
-      `${Math.round(value)}px`
-    );
-    try {
-      localStorage.setItem(storageKey, String(Math.round(value)));
-    } catch (e) {
-      /* ignore */
-    }
-    moveTabInk();
-  };
-  try {
-    const stored = parseInt(localStorage.getItem(storageKey) || "", 10);
-    if (Number.isFinite(stored)) apply(stored);
-  } catch (e) {
-    /* ignore */
+// 使用视口比例保存新布局，旧版两侧栏的像素宽度不适用于四栏分配。
+const workspaceWidthKey = "learning.workspaceWidths";
+const workspaceWidths = { course: 0.16, source: 0.50, chat: 0.17, mobileChat: 0.44 };
+try {
+  const saved = JSON.parse(localStorage.getItem(workspaceWidthKey) || "null");
+  for (const key of Object.keys(workspaceWidths)) {
+    if (Number.isFinite(saved?.[key]) && saved[key] > 0 && saved[key] < 1) workspaceWidths[key] = saved[key];
   }
-  gutter.addEventListener("mousedown", (e) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = rail.getBoundingClientRect().width;
+} catch (e) { /* 本地偏好不可用时使用默认比例。 */ }
+
+function clampWidth(value, min, max) { return Math.max(min, Math.min(max, value)); }
+
+function workspaceWidthBounds() {
+  const width = document.documentElement.clientWidth;
+  const mobile = width <= 1000;
+  const courseVisible = width > 1200 && !document.body.classList.contains("library-closed");
+  const course = clampWidth(workspaceWidths.course * width, width * 0.15, width * 0.20);
+  const available = width - (courseVisible ? course + 1 : 0) - (mobile ? 1 : 2);
+  const noteMin = Math.min(150, width * 0.4);
+  const chatMin = Math.min(180, width * 0.4);
+  // 即便 AI 收起，也为它保留可恢复的宽度边界，避免展开时改变原文宽度。
+  const chat = clampWidth(workspaceWidths[mobile ? "mobileChat" : "chat"] * width,
+    chatMin, available - noteMin - (mobile ? 0 : 260));
+  const source = mobile ? 0 : clampWidth(workspaceWidths.source * width, 260, available - noteMin - chat);
+  return { width, mobile, courseVisible, course, available, noteMin, chatMin, chat, source };
+}
+
+function applyWorkspaceWidths(persist = false) {
+  const box = workspaceWidthBounds();
+  const root = document.documentElement;
+  root.style.setProperty("--rail-l", `${box.course}px`);
+  root.style.setProperty("--workspace-source", `${box.source}px`);
+  root.style.setProperty("--rail-r", `${box.chat}px`);
+  for (const [gutter, value, min, max] of [
+    [gutterLeft, box.course, box.width * 0.15, box.width * 0.20],
+    [gutterSource, box.source, 260, box.available - box.noteMin - box.chat],
+    [gutterRight, box.chat, box.chatMin, box.available - box.noteMin - box.source],
+  ]) {
+    gutter.setAttribute("aria-valuemin", String(Math.round(min)));
+    gutter.setAttribute("aria-valuemax", String(Math.round(Math.max(min, max))));
+    gutter.setAttribute("aria-valuenow", String(Math.round(value)));
+    gutter.setAttribute("aria-valuetext", `${Math.round(value / box.width * 100)}%`);
+  }
+  if (persist) {
+    try { localStorage.setItem(workspaceWidthKey, JSON.stringify(workspaceWidths)); }
+    catch (e) { /* 宽度调整不依赖本地存储成功。 */ }
+  }
+}
+
+function resizeWorkspacePart(kind, delta, start) {
+  if (kind === "course") {
+    // 课程边界只在课程与原文之间交换空间，笔记和 AI 保持不变。
+    const course = clampWidth(start.course + delta, start.width * 0.15,
+      Math.min(start.width * 0.20, start.course + start.source - 260));
+    workspaceWidths.course = course / start.width;
+    workspaceWidths.source = (start.source + start.course - course) / start.width;
+  } else if (kind === "source") {
+    workspaceWidths.source = clampWidth(start.source + delta, 260,
+      start.available - start.noteMin - start.chat) / start.width;
+  } else {
+    const key = start.mobile ? "mobileChat" : "chat";
+    workspaceWidths[key] = clampWidth(start.chat - delta, start.chatMin,
+      start.available - start.noteMin - start.source) / start.width;
+  }
+  applyWorkspaceWidths(true);
+}
+
+function bindWorkspaceGutter(gutter, kind) {
+  gutter.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const start = workspaceWidthBounds();
+    gutter.setPointerCapture(event.pointerId);
     document.body.classList.add("is-resizing");
-    const move = (ev) => {
-      const delta = ev.clientX - startX;
-      apply(side === "left" ? startWidth + delta : startWidth - delta);
-    };
-    const up = () => {
+    const move = (next) => resizeWorkspacePart(kind, next.clientX - startX, start);
+    const finish = () => {
       document.body.classList.remove("is-resizing");
-      document.removeEventListener("mousemove", move);
-      document.removeEventListener("mouseup", up);
+      gutter.removeEventListener("pointermove", move);
+      gutter.removeEventListener("pointerup", finish);
+      gutter.removeEventListener("pointercancel", finish);
+      gutter.removeEventListener("lostpointercapture", finish);
     };
-    document.addEventListener("mousemove", move);
-    document.addEventListener("mouseup", up);
+    gutter.addEventListener("pointermove", move);
+    gutter.addEventListener("pointerup", finish);
+    gutter.addEventListener("pointercancel", finish);
+    gutter.addEventListener("lostpointercapture", finish);
   });
-  gutter.addEventListener("keydown", (e) => {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    e.preventDefault();
-    const width = rail.getBoundingClientRect().width;
-    const delta = e.key === "ArrowRight" ? 16 : -16;
-    apply(side === "left" ? width + delta : width - delta);
+  gutter.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    resizeWorkspacePart(kind, event.key === "ArrowRight" ? 16 : -16, workspaceWidthBounds());
   });
 }
 
@@ -444,65 +447,131 @@ function applyLibrary(payload) {
 
 function renderLibrary() {
   const query = (librarySearch.value || "").trim().toLowerCase();
-  const filtered = documents.filter((doc) => {
-    if (!query) return true;
-    return `${doc.title || ""} ${doc.source_name || ""}`.toLowerCase().includes(query);
-  });
-
-  const warnings = ((libraryState.library && libraryState.library.warnings) || []).filter(
-    (warning) => !(documents.length === 0 && warning.includes("资料库为空"))
-  );
+  const courses = libraryState.courses || [];
+  const threads = libraryState.threads || [];
+  libraryCount.textContent = String(documents.length);
+  libraryTree.replaceChildren();
+  libraryTree.classList.toggle("is-empty", !documents.length && !courses.length);
+  const warnings = (libraryState.library?.warnings || []).filter((warning) => !warning.includes("资料库为空"));
   libraryAlert.hidden = !warnings.length;
   libraryAlert.textContent = warnings.join(" ");
-
-  libraryTree.classList.toggle("is-empty", !documents.length);
-  if (!documents.length) {
-    libraryTree.innerHTML = `
-      <div class="library-drop-empty" id="library-drop-empty" role="button" tabindex="0" aria-label="导入资料">
-        <svg viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M12 6h16l8 8v28H12z"></path>
-          <path d="M28 6v8h8"></path>
-          <path d="M24 22v12M18 28h12"></path>
-        </svg>
-        <span class="library-drop-title">导入资料</span>
-        <span class="library-drop-hint">点这里选文件，或直接拖进来</span>
-      </div>`;
-    return;
-  }
-
-  libraryTree.innerHTML = "";
-  const importRow = document.createElement("button");
-  importRow.type = "button";
-  importRow.id = "library-import-row";
-  importRow.className = "library-import-row";
-  importRow.innerHTML =
-    '<span class="import-plus" aria-hidden="true">+</span><span>导入资料</span><span class="library-drop-hint">拖放也可以</span>';
-  libraryTree.appendChild(importRow);
-
-  if (!filtered.length) {
-    const empty = document.createElement("p");
-    empty.className = "empty";
-    empty.textContent = "没有匹配的资料。";
-    libraryTree.appendChild(empty);
-    return;
-  }
-
-  const groups = new Map();
-  for (const doc of filtered) {
-    const key = doc.origin === "library" ? "资料库文件" : "导入的资料";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(doc);
-  }
-
-  for (const [label, docs] of groups) {
+  const importButton = document.createElement("button");
+  importButton.type = "button";
+  importButton.id = "library-import-row";
+  importButton.className = "library-import-row";
+  importButton.textContent = "＋ 导入资料";
+  libraryTree.appendChild(importButton);
+  const linkedIds = new Set(courses.flatMap((course) => course.document_ids));
+  const groups = [...courses, { id: "", title: "未分组资料", document_ids: documents.filter((doc) => !linkedIds.has(doc.id)).map((doc) => doc.id) }];
+  for (const course of groups) {
+    const courseDocs = documents.filter((doc) => course.document_ids.includes(doc.id));
+    const matchesCourse = course.title.toLowerCase().includes(query);
+    const visibleDocs = courseDocs.filter((doc) => !query || matchesCourse || `${doc.title} ${doc.source_name || ""}`.toLowerCase().includes(query) || threads.some((thread) => thread.document_id === doc.id && thread.title.toLowerCase().includes(query)));
+    if (!course.id && !courseDocs.length && courses.length) continue;
+    if (query && !matchesCourse && !visibleDocs.length) continue;
+    const group = document.createElement("section");
+    group.className = "course-group";
+    group.dataset.courseId = course.id;
     const heading = document.createElement("div");
-    heading.className = "group-label";
-    heading.textContent = label;
-    libraryTree.appendChild(heading);
-    for (const doc of docs) {
-      libraryTree.appendChild(buildDocRow(doc));
+    heading.className = "course-heading";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    const expanded = !collapsedCourses.has(course.id) || !!query;
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.classList.toggle("is-selected", course.id === activeCourseId);
+    toggle.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${expanded ? "m4 6 4 4 4-4" : "m6 4 4 4-4 4"}"/></svg>`;
+    const label = document.createElement("span");
+    label.textContent = course.title;
+    toggle.appendChild(label);
+    toggle.addEventListener("click", () => {
+      activeCourseId = course.id;
+      if (collapsedCourses.has(course.id)) collapsedCourses.delete(course.id); else collapsedCourses.add(course.id);
+      renderLibrary();
+    });
+    heading.appendChild(toggle);
+    group.appendChild(heading);
+    if (expanded) {
+      for (const doc of visibleDocs) {
+        const file = document.createElement("div");
+        file.className = "course-file";
+        const row = buildDocRow(doc);
+        row.addEventListener("click", () => { activeCourseId = course.id; updateWorkspaceDocument(); });
+        file.appendChild(row);
+        if (doc.id === currentDocId()) {
+          for (const thread of threads.filter((item) => item.document_id === doc.id)) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "workspace-thread";
+            button.classList.toggle("is-active", thread.id === activeThreadId);
+            button.dataset.threadId = thread.id;
+            button.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h12v9H6l-4 3zM5 5h6M5 8h4"/></svg>';
+            const text = document.createElement("span");
+            text.textContent = thread.title;
+            button.appendChild(text);
+            button.addEventListener("click", () => openWorkspaceThread(thread));
+            file.appendChild(button);
+          }
+          const newThread = document.createElement("button");
+          newThread.type = "button";
+          newThread.className = "workspace-thread";
+          newThread.textContent = "＋ 新建对话";
+          newThread.addEventListener("click", () => createWorkspaceThread(doc.id));
+          file.appendChild(newThread);
+        }
+        group.appendChild(file);
+      }
+      if (!courseDocs.length) {
+        const empty = document.createElement("p"); empty.className = "course-empty";
+        empty.textContent = course.id ? "还没有资料，导入这门课程的第一份文件。" : "已有资料会保留在这里，也可以导入到课程。";
+        group.appendChild(empty);
+      }
+      const add = document.createElement("button");
+      add.type = "button"; add.className = "course-import"; add.textContent = "＋ 导入资料";
+      add.addEventListener("click", () => { activeCourseId = course.id; importCourseId = course.id; importInput.click(); });
+      group.appendChild(add);
     }
+    libraryTree.appendChild(group);
   }
+  updateWorkspaceDocument();
+}
+
+function updateWorkspaceDocument() {
+  const course = (libraryState.courses || []).find((item) => item.id === activeCourseId);
+  $("workspace-course-name").textContent = course?.title || "未分组资料";
+  $("workspace-notes-file").textContent = currentDoc?.title || "";
+  $("workspace-document-title").textContent = currentDoc?.title || "选择一份资料，开始学习";
+  $("workspace-document-format").textContent = currentDoc ? (FORMAT_LABEL[currentDoc.source_format] || "资料") : "阅读与思考，在同一个空间";
+  const thread = (libraryState.threads || []).find((item) => item.id === activeThreadId);
+  $("workspace-chat-title").textContent = thread?.title || "AI 对话";
+  const context = $("workspace-chat-context");
+  context.hidden = !currentDoc;
+  context.textContent = currentDoc?.title || "";
+}
+
+async function openWorkspaceThread(thread) {
+  const sequence = ++threadOpenSequence;
+  try {
+    await loadDocument(thread.document_id, { markOpen: true });
+    if (sequence !== threadOpenSequence || currentDocId() !== thread.document_id) return;
+    const response = await postJson(`/api/threads/${thread.id}/open`, {});
+    if (sequence !== threadOpenSequence || currentDocId() !== thread.document_id) return;
+    ++chatLoadSequence;
+    activeThreadId = thread.id;
+    threadByDocument.set(thread.document_id, thread.id);
+    chatMessages = response.messages || [];
+    resetChatSuggestions();
+    renderChat(); renderLibrary();
+    openRightRail(); switchTab("chat"); scheduleChatSuggestions();
+  } catch (error) { showToast(error.message, 5000); }
+}
+
+async function createWorkspaceThread(docId = currentDocId()) {
+  if (!docId) return showToast("先打开一份课程资料，再开始对话");
+  try {
+    const data = await postJson("/api/threads", { doc_id: docId });
+    applyLibrary(data.library);
+    await openWorkspaceThread(data.thread);
+  } catch (error) { showToast(error.message, 5000); }
 }
 
 // ------------------------------------------------------------
@@ -842,16 +911,20 @@ if (btnAskCross) btnAskCross.addEventListener("click", askAcrossDocuments);
 async function uploadFiles(fileList) {
   const files = Array.from(fileList || []);
   if (!files.length) return;
+  const targetCourse = importCourseId;
   railLeft.classList.add("is-importing");
   try {
     let imported = 0;
+    let firstImportedDoc = "";
     for (const file of files) {
       const form = new FormData();
       form.append("file", file);
+      if (targetCourse) form.append("course_id", targetCourse);
       try {
         const data = await api("/api/import", { method: "POST", body: form });
+        firstImportedDoc ||= data.document_id || "";
         if (data.duplicate) {
-          showToast(`${file.name}：内容已存在，跳过`);
+          showToast(`${file.name}：${importCourseId ? "已关联到当前课程" : "内容已存在，跳过"}`);
         } else {
           imported += 1;
         }
@@ -861,9 +934,14 @@ async function uploadFiles(fileList) {
     }
     if (imported) showToast(`已导入 ${imported} 个文件，正在后台解析`);
     await fetchLibraryData();
+    if (firstImportedDoc) {
+      activeCourseId = targetCourse;
+      await loadDocument(firstImportedDoc, { markOpen: true });
+    }
     if ((libraryState.jobs || []).length) startJobPolling();
   } finally {
     railLeft.classList.remove("is-importing");
+    importCourseId = "";
   }
 }
 
@@ -926,6 +1004,7 @@ async function loadPage() {
       api("/api/library"),
     ]);
     session = sessionData;
+    if (session.selected_document && session.selected_thread_id) threadByDocument.set(session.selected_document.id, session.selected_thread_id);
     applyLibrary(libraryData);
     renderLibrary();
     renderJobStrip();
@@ -951,7 +1030,6 @@ async function loadDocument(docId, options = {}) {
     return;
   }
   if (notesDirty) await saveNotesNow();
-  stopNotesDraft(false);
   await savePositionNow();
 
   const token = ++docToken;
@@ -970,18 +1048,13 @@ async function loadDocument(docId, options = {}) {
     currentContent = data;
     currentVersionId = data.version && data.version.id ? data.version.id : "";
     currentBlocks = data.blocks || [];
-    exerciseReview.innerHTML = "";
-    codeEditor.value = "";
-    btnExerciseNext.hidden = true;
     renderDocView(data);
     await loadNotes(docId);
+    if (token !== docToken) return;
     await loadChat(docId);
-    await loadLearningEvidence(docId);
+    if (token !== docToken) return;
     await refreshSessionQuiet();
     scheduleChatSuggestions();
-    renderExercise();
-    renderReview();
-    updateTabBadges();
     renderSidebarActive();
     if (isNarrow()) {
       document.body.classList.remove("rail-left-open", "rail-right-open");
@@ -995,6 +1068,9 @@ async function loadDocument(docId, options = {}) {
 }
 
 function renderDocView(data) {
+  const course = (libraryState.courses || []).find((item) => item.id === activeCourseId && item.document_ids.includes(data.document?.id))
+    || (libraryState.courses || []).find((item) => item.document_ids.includes(data.document?.id));
+  activeCourseId = course?.id || "";
   topbarCrumb.hidden = false;
   topbarCrumb.textContent = (data.document && (data.document.source_name || data.document.title)) || "";
   const versions = data.versions || [];
@@ -1015,6 +1091,7 @@ function renderDocView(data) {
   }
   currentViewMode = data.view_mode === "pdf" ? "pdf" : "markdown";
   currentPdfUrl = data.pdf_url || "";
+  updateWorkspaceDocument();
 
   if (data.status !== "ready") {
     pdfView.hidden = true;
@@ -1023,7 +1100,6 @@ function renderDocView(data) {
     clearPdfShell();
     docEmpty.hidden = false;
     renderStatusCard(data);
-    renderExercise();
     return;
   }
 
@@ -1118,7 +1194,7 @@ function isTypingTarget(target) {
 }
 
 document.addEventListener("keydown", (e) => {
-  if (document.querySelector("#workspace-settings[open]")) return;
+  if (document.querySelector("dialog[open]")) return;
   if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "F" || e.key === "f")) {
     e.preventDefault();
     toggleFocusMode();
@@ -1173,18 +1249,19 @@ function renderStatusCard(data) {
 }
 
 function showEmpty() {
-  stopNotesDraft(false);
+  ++chatLoadSequence;
+  ++threadOpenSequence;
+  activeThreadId = null;
   resetChatSuggestions();
   docPage.hidden = true;
   docEmpty.hidden = false;
   topbarCrumb.hidden = true;
   docEmpty.innerHTML = "";
   currentDoc = null;
+  updateWorkspaceDocument();
   currentContent = null;
   currentVersionId = "";
   currentBlocks = [];
-  questionCache = "";
-  lastSubmission = null;
   chatMessages = [];
   renderChat();
   chatInput.value = "";
@@ -1193,19 +1270,8 @@ function showEmpty() {
   notesContent = "";
   notesDirty = false;
   notesContentEl.value = "";
-  notesDraftWrap.hidden = true;
-  notesDraftBody.innerHTML = "";
-  notesDraftText = "";
-  notesGenerationStatus.textContent = "";
-  notesSuggestions = [];
-  notesAutoSuggestDoc = "";
-  renderSuggestions();
   updateNotesEnabled();
   setSaveState("", "");
-  exerciseReview.innerHTML = "";
-  codeEditor.value = "";
-  renderExercise();
-  renderReview();
   renderSidebarActive();
 
   if (!documents.length) {
@@ -1256,11 +1322,7 @@ async function refreshSessionQuiet() {
   try {
     const data = await api("/api/session");
     session = data;
-    lastSubmission = data.last_submission || null;
     updateLlmStatus();
-    renderExercise();
-    renderReview();
-    updateTabBadges();
     renderLibrary();
   } catch (e) {
     /* 静默刷新失败不打断阅读 */
@@ -1469,8 +1531,8 @@ document.addEventListener("mousedown", (e) => {
 // ------------------------------------------------------------
 const DEFAULT_CHAT_QUESTIONS = [
   "帮我梳理这份资料的重点",
-  "用一个例子解释核心概念",
-  "出一道题，检查我的理解",
+  "出个题考察一下",
+  "看看我的笔记还需要补充什么",
 ];
 
 function renderChatSuggestions(questions = DEFAULT_CHAT_QUESTIONS, source = "default") {
@@ -1516,6 +1578,7 @@ async function refreshChatSuggestions() {
     quote: selection?.quote?.slice(0, 2000) || "",
     block_id: selection?.blockId || (currentViewMode === "markdown" ? collectPosition()?.block_id : "") || "",
     page: currentViewMode === "pdf" ? pdfReadingPage : 0,
+    ...(activeThreadId ? { thread_id: activeThreadId } : {}),
   };
   const key = JSON.stringify([context, currentVersionId, chatMessages.slice(-6)]);
   if (key === suggestionsKey) return;
@@ -1545,11 +1608,10 @@ async function refreshChatSuggestions() {
 function renderChat() {
   if (!currentDocId() || !chatMessages.length) {
     chatMessagesEl.replaceChildren();
-    updateTabBadges();
     return;
   }
   chatMessagesEl.innerHTML = chatMessages
-    .map((m) => {
+    .map((m, index) => {
       const isUser = m.role === "user";
       const roleLabel = isUser ? "你" : m.via === "ask" ? "助教 · 跨资料" : "助教";
       if (m.pending) {
@@ -1576,6 +1638,7 @@ function renderChat() {
           isUser ? `<p>${escapeHtml(m.content || "")}</p>` : renderMarkdown(m.content || "")
         }</div>
         ${sources}
+        ${!isUser ? `<button type="button" class="chat-to-notes" data-note-message="${index}" aria-label="将这条回答记入笔记" title="记入笔记"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3h7l3 3v5M12 3v4h3M5 3v14h5M14.5 12v6M11.5 15h6"/></svg></button>` : ""}
       </div>`;
     })
     .join("");
@@ -1587,22 +1650,41 @@ function renderChat() {
       if (docId) loadDocument(docId, { markOpen: true });
     });
   });
+  chatMessagesEl.querySelectorAll("[data-note-message]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const message = chatMessages[Number(button.dataset.noteMessage)];
+      if (!notesDocId || !message || message.role !== "assistant") return;
+      prepareNotesWrite();
+      notesContentEl.value = [notesContentEl.value.trimEnd(), message.content].filter(Boolean).join("\n\n");
+      finishNotesWrite();
+      notesDirty = true;
+      await saveNotesNow();
+      if (notesDirty) await saveNotesNow();
+    });
+  });
   chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-  updateTabBadges();
 }
 
 async function loadChat(docId) {
+  const sequence = ++chatLoadSequence;
+  const saved = threadByDocument.get(docId);
+  const available = (libraryState.threads || []).filter((thread) => thread.document_id === docId);
+  const desired = available.find((thread) => thread.id === saved)?.id || available[0]?.id || null;
+  activeThreadId = desired;
   chatMessages = [];
-  try {
-    const data = await api(`/api/chat?doc_id=${encodeURIComponent(docId)}`);
-    if (docId !== currentDocId()) return;
-    chatMessages = data.messages || [];
-  } catch (e) {
-    if (docId !== currentDocId()) return;
-    chatMessages = [];
-  }
   renderChat();
-  scheduleChatSuggestions();
+  try {
+    const params = new URLSearchParams({ doc_id: docId });
+    if (desired) params.set("thread_id", desired);
+    const data = await api(`/api/chat?${params}`);
+    if (sequence !== chatLoadSequence || docId !== currentDocId()) return;
+    chatMessages = data.messages || [];
+  } catch (error) {
+    if (sequence !== chatLoadSequence || docId !== currentDocId()) return;
+    chatMessages = [];
+    showToast(error.message, 5000);
+  }
+  renderChat(); updateWorkspaceDocument(); scheduleChatSuggestions();
 }
 
 async function sendChat(question, quote) {
@@ -1620,8 +1702,19 @@ async function sendChat(question, quote) {
     showToast("先写一句问题，或在正文里划选一段");
     return;
   }
+  const requestedDoc = currentDocId();
+  const requestedThread = activeThreadId;
+  // 对话可检查当前笔记，先等待现有保存，避免把上一版笔记当成用户刚写的内容。
+  if (notesDirty || notesSaving) {
+    await saveNotesNow();
+    if (notesDirty) await saveNotesNow();
+    if (notesDirty) { showToast("笔记未保存成功，请重试"); return; }
+  }
+  if (chatSending || requestedDoc !== currentDocId() || requestedThread !== activeThreadId) return;
   chatSending = true;
   const sendingDocId = currentDocId();
+  const sendingThreadId = activeThreadId;
+  const inputAtSend = chatInput.value;
   ++suggestionsSequence;
   suggestionsController?.abort();
   chatSuggestionsEl.setAttribute("aria-busy", "false");
@@ -1630,15 +1723,19 @@ async function sendChat(question, quote) {
   try {
     const data = await postJson("/api/chat", {
       doc_id: sendingDocId,
+      ...(sendingThreadId ? { thread_id: sendingThreadId } : {}),
       title: currentDoc ? currentDoc.title : undefined,
       question: q || "讲这段",
       quote: quote || undefined,
       block_id: quote ? (selection && selection.blockId) || undefined : undefined,
     });
-    if (sendingDocId !== currentDocId()) return;
+    if (sendingDocId !== currentDocId() || sendingThreadId !== activeThreadId) return;
+    activeThreadId = data.thread_id || sendingThreadId;
+    if (activeThreadId) threadByDocument.set(sendingDocId, activeThreadId);
     chatMessages = data.messages || [];
     renderChat();
-    chatInput.value = "";
+    if (chatInput.value === inputAtSend) chatInput.value = "";
+    fetchLibraryData().catch(() => {});
   } catch (e) {
     showToast(e.message, 5000);
   } finally {
@@ -1671,6 +1768,7 @@ async function spotAsk() {
   try {
     const data = await postJson("/api/chat/spot", {
       doc_id: currentDocId(),
+      ...(activeThreadId ? { thread_id: activeThreadId } : {}),
       title: currentDoc ? currentDoc.title : undefined,
       question: bubbleInput.value.trim() || "讲这段",
       quote: selection.quote,
@@ -1723,7 +1821,11 @@ async function runSelectionAction(mode) {
     showToast("请先在 API 设置中配置接口；阅读和笔记不受影响");
     return;
   }
-  if (mode === "check") return requestCheckQuestion();
+  if (mode === "check") {
+    openRightRail();
+    await sendChat("根据我选中的这段原文出个题考察一下，先不要给答案。", selection.quote);
+    return;
+  }
   resetCheckUi();
   bubbleAnswer.hidden = false;
   bubbleAnswer.innerHTML = `<div class="loading">${SELECTION_ACTION_LABEL[mode]}中…</div>`;
@@ -1887,15 +1989,11 @@ function updateNotesEnabled() {
   notesEmpty.hidden = hasDoc;
   notesLayout.hidden = !hasDoc;
   notesContentEl.disabled = !hasDoc;
-  notesInstruction.disabled = !hasDoc;
   btnNotesSave.disabled = !hasDoc || notesSaving;
   if (btnNotesUndo) btnNotesUndo.disabled = !notesUndoStack.length;
   if (btnNotesExport) {
     btnNotesExport.disabled = !hasDoc || !(notesContentEl.value || "").trim();
   }
-  const ai = hasDoc && ready() && llmConfigured();
-  syncNotesSend();
-  btnNotesRefreshSuggest.disabled = !ai;
 }
 
 const NOTES_UNDO_LIMIT = 50;
@@ -1938,7 +2036,6 @@ function prepareNotesWrite() {
 function finishNotesWrite() {
   notesLastValue = notesContentEl.value;
   updateNotesUndoButton();
-  updateTabBadges();
 }
 
 async function undoNotes() {
@@ -1949,7 +2046,6 @@ async function undoNotes() {
   notesDirty = true;
   clearTimeout(notesSaveTimer);
   updateNotesUndoButton();
-  updateTabBadges();
   if (notesSaving) scheduleNotesSave();
   else await saveNotesNow();
   showToast("已撤销一步");
@@ -1985,23 +2081,16 @@ function exportNotes() {
 }
 
 async function loadNotes(docId) {
-  stopNotesDraft(false);
-  notesGenerationStatus.textContent = "";
   notesDocId = docId;
   notesDirty = false;
-  notesSuggestions = [];
-  notesAutoSuggestDoc = "";
-  notesDraftText = "";
-  notesDraftWrap.hidden = true;
-  notesDraftBody.innerHTML = "";
   notesContentEl.value = "";
   resetNotesUndo();
   setSaveState("", "");
   updateNotesEnabled();
-  renderSuggestions();
   if (!docId) return;
   try {
     const data = await api(`/api/notes?doc_id=${encodeURIComponent(docId)}`);
+    if (docId !== currentDocId() || notesDocId !== docId) return;
     notesDocId = data.doc_id || docId;
     notesTitle = data.title || (currentDoc && currentDoc.title) || "";
     notesContent = data.content || "";
@@ -2012,12 +2101,21 @@ async function loadNotes(docId) {
     setSaveState("is-err", "加载失败");
   }
   updateNotesEnabled();
-  updateTabBadges();
 }
 
-async function saveNotesNow() {
+function saveNotesNow() {
+  if (notesSaveInFlight) return notesSaveInFlight;
+  notesSaveInFlight = performNotesSave().then((saved) => {
+    if (saved && notesDirty && notesDocId) scheduleNotesSave();
+    return saved;
+  }).finally(() => { notesSaveInFlight = null; });
+  return notesSaveInFlight;
+}
+
+async function performNotesSave() {
   if (!notesDocId || notesSaving) return;
   const content = notesContentEl.value;
+  const savingDocId = notesDocId;
   notesSaving = true;
   btnNotesSave.disabled = true;
   setSaveState("is-saving", "保存中…");
@@ -2026,13 +2124,14 @@ async function saveNotesNow() {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        doc_id: notesDocId,
+        doc_id: savingDocId,
         title: notesTitle || undefined,
         content,
       }),
     });
+    if (savingDocId !== notesDocId) return true;
     notesContent = data.content != null ? data.content : content;
-    notesDirty = false;
+    notesDirty = notesContentEl.value !== content;
     setSaveState("is-ok", data.updated_at ? `已保存 · ${data.updated_at}` : "已保存");
     if (data.overview) {
       libraryState.overview = data.overview;
@@ -2040,7 +2139,7 @@ async function saveNotesNow() {
       if (doc) doc.has_note = content.trim() ? 1 : 0;
       renderLibrary();
     }
-    updateTabBadges();
+    return true;
   } catch (e) {
     setSaveState("is-err", "保存失败");
     showToast(e.message, 5000);
@@ -2056,191 +2155,6 @@ function scheduleNotesSave() {
   notesSaveTimer = setTimeout(() => saveNotesNow(), 800);
 }
 
-function onNotesTabShown() {
-  updateNotesEnabled();
-  if (!ready() || !llmConfigured()) return;
-  if (!notesDocId || notesAutoSuggestDoc === notesDocId) return;
-  notesAutoSuggestDoc = notesDocId;
-  fetchSuggestions(false);
-}
-
-function renderSuggestions() {
-  if (!notesSuggestions.length) {
-    notesSuggestionsList.innerHTML = `<p class="empty">${
-      llmConfigured() ? "暂无建议，点「换一批」看看" : "配置 API 后，切到笔记页会自动给建议。"
-    }</p>`;
-    return;
-  }
-  notesSuggestionsList.innerHTML = notesSuggestions
-    .map(
-      (s) => `
-      <div class="suggest-item" data-id="${escapeHtml(s.id)}">
-        <p class="suggest-reason">${escapeHtml(s.reason || "建议")}</p>
-        <p class="suggest-text">${escapeHtml(s.text || "")}</p>
-        <div class="suggest-actions">
-          <button type="button" class="btn btn-small btn-primary suggest-adopt">采纳</button>
-          <button type="button" class="btn btn-small btn-quiet suggest-ignore">忽略</button>
-        </div>
-      </div>`
-    )
-    .join("");
-  notesSuggestionsList.querySelectorAll(".suggest-adopt").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.closest(".suggest-item").dataset.id;
-      const item = notesSuggestions.find((s) => s.id === id);
-      if (!item) return;
-      const value = notesContentEl.value;
-      prepareNotesWrite();
-      notesContentEl.value = value.trim() ? `${value.trimEnd()}\n\n${item.text}` : item.text;
-      finishNotesWrite();
-      notesDirty = true;
-      notesSuggestions = notesSuggestions.filter((s) => s.id !== id);
-      renderSuggestions();
-      saveNotesNow();
-      showToast("已采纳，写进笔记");
-    });
-  });
-  notesSuggestionsList.querySelectorAll(".suggest-ignore").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.closest(".suggest-item").dataset.id;
-      notesSuggestions = notesSuggestions.filter((s) => s.id !== id);
-      renderSuggestions();
-    });
-  });
-}
-
-async function fetchSuggestions(showOk) {
-  if (!notesDocId || !llmConfigured()) return;
-  btnNotesRefreshSuggest.disabled = true;
-  notesSuggestionsList.innerHTML = '<div class="loading">AI 正在看你的笔记…</div>';
-  try {
-    const data = await postJson("/api/notes/suggest", { doc_id: notesDocId });
-    notesSuggestions = data.suggestions || [];
-    renderSuggestions();
-    if (showOk) showToast("建议已刷新");
-  } catch (e) {
-    renderSuggestions();
-    showToast(e.message, 5000);
-  } finally {
-    updateNotesEnabled();
-  }
-}
-
-function syncNotesSend() {
-  const generating = !!notesDraftRequest;
-  btnNotesDraft.classList.toggle("is-generating", generating);
-  btnNotesDraft.setAttribute("aria-label", generating ? "停止生成" : "发送笔记请求");
-  btnNotesDraft.title = generating ? "停止生成" : "发送";
-  btnNotesDraft.disabled = !generating && (!notesDocId || !ready() || !llmConfigured());
-  btnNotesDraftApply.disabled = generating || !notesDraftText;
-  btnNotesDraftDiscard.disabled = generating;
-}
-
-function renderNotesDraft(text) {
-  notesDraftBody.classList.remove("is-streaming");
-  setMarkdownHtml(notesDraftBody, text);
-  attachCopyButtons(notesDraftBody);
-}
-
-function stopNotesDraft(showStatus = true) {
-  const request = notesDraftRequest;
-  if (!request) return;
-  notesDraftRequest = null;
-  request.controller.abort();
-  notesDraftText = request.text || request.previousText;
-  notesDraftWrap.hidden = !notesDraftText;
-  renderNotesDraft(notesDraftText);
-  notesDraftHeading.textContent = request.text ? "已停止，保留已生成内容" : "草稿预览，还没写进笔记";
-  notesGenerationStatus.textContent = showStatus ? "已停止生成" : "";
-  syncNotesSend();
-}
-
-async function requestDraft() {
-  if (notesDraftRequest) { stopNotesDraft(); return; }
-  if (!notesDocId || !ready() || !llmConfigured()) return;
-  const request = {
-    controller: new AbortController(), docId: notesDocId,
-    text: "", previousText: notesDraftText,
-  };
-  notesDraftRequest = request;
-  notesDraftText = "";
-  notesDraftWrap.hidden = false;
-  notesDraftHeading.textContent = "草稿预览，还没写进笔记";
-  notesDraftBody.replaceChildren();
-  notesDraftBody.classList.add("is-streaming");
-  notesGenerationStatus.textContent = "正在生成…";
-  syncNotesSend();
-  let reader = null;
-  let completed = false;
-  function receive(text) {
-    if (notesDraftRequest !== request || notesDocId !== request.docId) return;
-    request.text += text;
-    notesDraftBody.textContent = request.text;
-  }
-  try {
-    const response = await fetch("/api/notes/draft", {
-      method: "POST", signal: request.controller.signal,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ doc_id: request.docId, instruction: notesInstruction.value.trim(), stream: true }),
-    });
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({}));
-      throw new Error(data.error || `请求失败（HTTP ${response.status}）`);
-    }
-    if (!response.headers.get("content-type")?.includes("text/event-stream")) {
-      receive((await response.json()).draft || "");
-      completed = true;
-    } else {
-      reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      function parseLine(line) {
-        if (!line.startsWith("data:")) return;
-        const event = JSON.parse(line.slice(5).trim());
-        if (event.error) throw new Error(event.error);
-        if (typeof event.delta === "string") receive(event.delta);
-        if (event.done) completed = true;
-      }
-      while (!completed) {
-        const { value, done } = await reader.read();
-        buffer += decoder.decode(value, { stream: !done });
-        const lines = buffer.split("\n");
-        buffer = lines.pop();
-        lines.forEach((line) => parseLine(line.trim()));
-        if (done) { if (buffer.trim()) parseLine(buffer.trim()); break; }
-      }
-      if (!completed) throw new Error("连接已中断，已保留收到的内容");
-    }
-    if (notesDraftRequest !== request || notesDocId !== request.docId) return;
-    notesDraftText = request.text.trim();
-    renderNotesDraft(notesDraftText || "（空草稿）");
-    notesGenerationStatus.textContent = notesDraftText ? "已生成，确认后写进笔记" : "没有生成内容，请调整要求后重试";
-  } catch (error) {
-    if (notesDraftRequest !== request || request.controller.signal.aborted) return;
-    notesDraftText = request.text || request.previousText;
-    notesDraftWrap.hidden = !notesDraftText;
-    renderNotesDraft(notesDraftText);
-    notesGenerationStatus.textContent = error.message || "生成失败，请重试";
-  } finally {
-    if (reader) { await reader.cancel().catch(() => {}); reader.releaseLock(); }
-    if (notesDraftRequest === request) { notesDraftRequest = null; syncNotesSend(); }
-  }
-}
-
-async function applyDraft() {
-  if (notesDraftRequest || !notesDraftText) return;
-  prepareNotesWrite();
-  notesContentEl.value = notesDraftReplace.checked
-    ? notesDraftText
-    : `${notesContentEl.value.trimEnd()}\n\n---\n\n${notesDraftText}`.trim();
-  finishNotesWrite();
-  notesDirty = true;
-  notesDraftWrap.hidden = true;
-  notesDraftText = "";
-  await saveNotesNow();
-  showToast("草稿已写进笔记");
-}
-
 btnNotesSave.addEventListener("click", saveNotesNow);
 btnNotesUndo.addEventListener("click", undoNotes);
 btnNotesExport.addEventListener("click", exportNotes);
@@ -2250,202 +2164,8 @@ notesContentEl.addEventListener("input", () => {
   if (btnNotesExport) {
     btnNotesExport.disabled = !(notesContentEl.value || "").trim();
   }
-  updateTabBadges();
   scheduleNotesSave();
 });
-btnNotesRefreshSuggest.addEventListener("click", () => {
-  notesAutoSuggestDoc = notesDocId;
-  fetchSuggestions(true);
-});
-btnNotesDraft.addEventListener("click", requestDraft);
-notesInstruction.addEventListener("keydown", (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && !event.isComposing) {
-    event.preventDefault();
-    if (!notesDraftRequest) requestDraft();
-  }
-});
-btnNotesDraftApply.addEventListener("click", applyDraft);
-btnNotesDraftDiscard.addEventListener("click", () => {
-  notesDraftWrap.hidden = true;
-  notesDraftText = "";
-});
-
-// ------------------------------------------------------------
-// 练习 / 复盘
-// ------------------------------------------------------------
-async function loadLearningEvidence(docId) {
-  lastExerciseEvidenceId = "";
-  if (exerciseSelfRate) {
-    exerciseSelfRate.hidden = true;
-    markSelfRate(exerciseSelfRate, "");
-  }
-  if (exerciseEvidenceStatus) exerciseEvidenceStatus.textContent = "";
-  if (!docId) return;
-  try {
-    const data = await api(`/api/documents/${encodeURIComponent(docId)}/learning`);
-    const latest = (data.practice || [])[0];
-    if (!latest) return;
-    lastExerciseEvidenceId = latest.id || "";
-    if (exerciseSelfRate) {
-      exerciseSelfRate.hidden = false;
-      markSelfRate(exerciseSelfRate, latest.self_level || "");
-    }
-    if (exerciseEvidenceStatus) {
-      if (latest.version_id && currentVersionId && latest.version_id !== currentVersionId) {
-        exerciseEvidenceStatus.textContent = "最近一次练习来自旧版本";
-      } else {
-        exerciseEvidenceStatus.textContent = latest.created_at
-          ? `最近一次练习 · ${latest.created_at}`
-          : "最近一次练习";
-      }
-    }
-  } catch (e) {
-    /* 学习记录读取失败不影响阅读与出题 */
-  }
-}
-
-async function rateExercise(level) {
-  if (!lastExerciseEvidenceId) return;
-  try {
-    await patchJson(
-      `/api/exercise-evidence/${encodeURIComponent(lastExerciseEvidenceId)}`,
-      { self_level: level }
-    );
-    markSelfRate(exerciseSelfRate, level);
-    await refreshSessionQuiet();
-    showToast(`已记录练习自评：${level}`);
-  } catch (e) {
-    showToast(e.message, 5000);
-  }
-}
-
-function renderExercise() {
-  const docId = currentDocId();
-  const selected = session && session.selected_document;
-  const sameDoc = selected && selected.id === docId;
-  const exercise = sameDoc ? session.exercise || {} : {};
-  exerciseDocId = docId;
-  questionCache = (exercise.question || "").trim();
-  if (!docId) {
-    exerciseQuestion.innerHTML = '<p class="empty">打开一份资料后可以出题。</p>';
-    btnSubmit.disabled = true;
-    btnExerciseNext.hidden = true;
-  } else if (!ready()) {
-    exerciseQuestion.innerHTML = '<p class="empty">资料解析完成后可以出题。</p>';
-    btnSubmit.disabled = true;
-    btnExerciseNext.hidden = true;
-  } else if (questionCache) {
-    setMarkdownHtml(exerciseQuestion, questionCache);
-    btnSubmit.disabled = !llmConfigured();
-    btnExerciseNext.hidden = false;
-  } else {
-    exerciseQuestion.innerHTML = '<p class="empty">点「出题」生成一道针对这份资料的练习。</p>';
-    btnSubmit.disabled = true;
-    btnExerciseNext.hidden = true;
-  }
-  lastSubmission = sameDoc ? session.last_submission : null;
-  if (exerciseSelfRate) exerciseSelfRate.hidden = !lastExerciseEvidenceId;
-  updateLlmStatus();
-  updateTabBadges();
-}
-
-function renderReview() {
-  const sub = lastSubmission;
-  if (!sub || !sub.review) {
-    lastReview.innerHTML = '<p class="empty">提交解答后，这里显示你的解答和 AI 批改。</p>';
-    updateTabBadges();
-    return;
-  }
-  lastReview.innerHTML = `
-    <p class="meta">${escapeHtml(sub.title || "")}${sub.submitted_at ? ` · ${escapeHtml(sub.submitted_at)}` : ""}</p>
-    <h3>题目</h3>
-    ${renderMarkdown(sub.question || "")}
-    <h3>你的解答</h3>
-    <pre><code>${escapeHtml(sub.code || "")}</code></pre>
-    <h3>批改</h3>
-    ${renderMarkdown(sub.review || "")}
-  `;
-  attachCopyButtons(lastReview);
-  typesetMath(lastReview);
-  updateTabBadges();
-}
-
-async function requestExercise() {
-  if (!ready()) return showToast("资料还没解析完成");
-  if (!llmConfigured()) return showToast("请先配置 API；阅读和笔记不受影响");
-  btnExercise.disabled = true;
-  btnExerciseNext.hidden = true;
-  exerciseReview.innerHTML = "";
-  codeEditor.value = "";
-  lastExerciseEvidenceId = "";
-  if (exerciseSelfRate) {
-    exerciseSelfRate.hidden = true;
-    markSelfRate(exerciseSelfRate, "");
-  }
-  if (exerciseEvidenceStatus) exerciseEvidenceStatus.textContent = "";
-  exerciseQuestion.innerHTML = '<div class="loading">正在出题…</div>';
-  try {
-    const data = await postJson("/api/exercise", {
-      doc_id: currentDocId(),
-      difficulty: exerciseDifficulty.value,
-    });
-    questionCache = data.question || "";
-    setMarkdownHtml(exerciseQuestion, questionCache);
-    attachCopyButtons(exerciseQuestion);
-    btnSubmit.disabled = !llmConfigured();
-    btnExerciseNext.hidden = false;
-    updateTabBadges();
-  } catch (e) {
-    exerciseQuestion.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
-    showToast(e.message, 5000);
-  } finally {
-    updateLlmStatus();
-  }
-}
-
-async function submitExercise() {
-  const answer = codeEditor.value.trim();
-  if (!answer) return showToast("先写解答");
-  btnSubmit.disabled = true;
-  btnExerciseNext.hidden = true;
-  exerciseReview.innerHTML = '<div class="loading">正在批改…</div>';
-  try {
-    const data = await postJson("/api/exercise/submit", {
-      doc_id: currentDocId(),
-      code: answer,
-    });
-    setMarkdownHtml(exerciseReview, data.review || "");
-    attachCopyButtons(exerciseReview);
-    lastExerciseEvidenceId = data.evidence_id || "";
-    if (exerciseSelfRate) {
-      exerciseSelfRate.hidden = !lastExerciseEvidenceId;
-      markSelfRate(exerciseSelfRate, "");
-    }
-    if (exerciseEvidenceStatus) {
-      exerciseEvidenceStatus.textContent = lastExerciseEvidenceId ? "刚提交的练习" : "";
-    }
-    btnExerciseNext.hidden = false;
-    await refreshSessionQuiet();
-    renderReview();
-    showToast("批改完成");
-  } catch (e) {
-    exerciseReview.innerHTML = `<div class="error">${escapeHtml(e.message)}</div>`;
-    showToast(e.message, 5000);
-  } finally {
-    updateLlmStatus();
-  }
-}
-
-btnExercise.addEventListener("click", requestExercise);
-btnExerciseNext.addEventListener("click", requestExercise);
-btnSubmit.addEventListener("click", submitExercise);
-if (exerciseSelfRate) {
-  exerciseSelfRate.addEventListener("click", (e) => {
-    const btn = e.target.closest("button[data-level]");
-    if (btn) rateExercise(btn.dataset.level);
-  });
-}
-
 // ------------------------------------------------------------
 // 确认 / 配置 / 重置
 // ------------------------------------------------------------
@@ -2498,24 +2218,11 @@ function updateLlmStatus() {
   const canAI = ready() && llmConfigured();
   btnChatSend.disabled = !canAI || chatSending;
   chatSuggestionsEl.querySelectorAll("button").forEach((button) => { button.disabled = chatSending; });
-  syncNotesSend();
-  btnNotesRefreshSuggest.disabled = !canAI || !notesDocId;
-  btnExercise.disabled = !canAI;
-  btnSubmit.disabled = !canAI || !questionCache;
 }
 
 // ------------------------------------------------------------
 // 标签徽章
 // ------------------------------------------------------------
-function updateTabBadges() {
-  if (badgeChat) {
-    badgeChat.hidden = !chatMessages.length;
-    badgeChat.textContent = String(chatMessages.length);
-  }
-  if (dotNotes) dotNotes.hidden = !(notesContentEl.value || "").trim();
-  if (dotExercise) dotExercise.hidden = !questionCache;
-}
-
 // ------------------------------------------------------------
 // Markdown 渲染（与后端 source.render_markdown 对应）
 // ------------------------------------------------------------
@@ -2895,13 +2602,61 @@ function bindBlockClicks() {
   });
 }
 
+// 课程与导航入口复用现有导入、阅读和设置弹窗，不创建独立整页。
+const courseDialog = $("course-dialog");
+$("btn-create-course").addEventListener("click", () => {
+  $("course-form-error").hidden = true;
+  courseDialog.showModal();
+  $("course-title").focus();
+});
+$("btn-course-cancel").addEventListener("click", () => courseDialog.close());
+$("course-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = $("btn-course-submit");
+  button.disabled = true;
+  $("course-form-error").hidden = true;
+  try {
+    const data = await postJson("/api/courses", { title: $("course-title").value.trim() });
+    applyLibrary(data.library);
+    activeCourseId = data.course.id;
+    collapsedCourses.delete(activeCourseId);
+    renderLibrary();
+    courseDialog.close();
+    $("course-form").reset();
+    if (isLibraryDrawer()) setLeftRail(true, true);
+    showToast("课程已创建，可以导入这门课程的资料");
+  } catch (error) {
+    $("course-form-error").textContent = error.message;
+    $("course-form-error").hidden = false;
+  } finally { button.disabled = false; }
+});
+$("btn-courses").addEventListener("click", () => { librarySearch.value = ""; renderLibrary(); });
+$("btn-knowledge-sky").addEventListener("click", () => $("knowledge-dialog").showModal());
+$("btn-knowledge-close").addEventListener("click", () => $("knowledge-dialog").close());
+$("btn-sidebar-fold").addEventListener("click", () => {
+  if (isLibraryDrawer()) setLeftRail(false); else document.body.classList.add("library-closed");
+});
+$("btn-document-chat").addEventListener("click", toggleWorkspaceChat);
+$("btn-close-chat").addEventListener("click", () => setRightRail(false));
+$("btn-source-toggle").addEventListener("click", () => {
+  document.body.classList.toggle("source-open");
+  $("btn-source-toggle").setAttribute("aria-expanded", String(document.body.classList.contains("source-open")));
+});
+$("btn-source-close").addEventListener("click", () => { document.body.classList.remove("source-open"); $("btn-source-toggle").setAttribute("aria-expanded", "false"); });
+$("btn-new-thread").addEventListener("click", () => createWorkspaceThread());
+
 // ------------------------------------------------------------
 // 初始化
 // ------------------------------------------------------------
-bindGutter(gutterLeft, railLeft, "left", "learning.railL", 220, 460);
-bindGutter(gutterRight, railRight, "right", "learning.railR", 300, 560);
+applyWorkspaceWidths();
+bindWorkspaceGutter(gutterLeft, "course");
+bindWorkspaceGutter(gutterSource, "source");
+bindWorkspaceGutter(gutterRight, "chat");
 window.addEventListener("resize", () => {
-  moveTabInk();
+  // 窗口变化直接适配新分栏，避免把旧断点的网格也当作抽屉动画插值。
+  clearTimeout(chatSlideTimer);
+  document.body.classList.remove("chat-sliding");
+  applyWorkspaceWidths();
   syncChatToggle();
   syncScrim();
 });
@@ -2940,8 +2695,8 @@ window.addEventListener("learning:data-changed", (event) => {
   loadPage();
 });
 document.addEventListener("DOMContentLoaded", () => {});
+if (window.matchMedia("(max-width: 1000px)").matches) setRightRail(false, false);
 switchTab("chat");
-moveTabInk();
 loadReadingSettings();
 renderChatSuggestions();
 loadPage();
