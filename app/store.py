@@ -126,6 +126,7 @@ CREATE TABLE IF NOT EXISTS notes (
 CREATE TABLE IF NOT EXISTS chat_messages (
     id          TEXT PRIMARY KEY,
     document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    thread_id   TEXT REFERENCES chat_threads(id),
     role        TEXT NOT NULL,
     content     TEXT NOT NULL,
     quote       TEXT NOT NULL DEFAULT '',
@@ -133,6 +134,25 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     created_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_chat_doc ON chat_messages(document_id, created_at);
+
+CREATE TABLE IF NOT EXISTS courses (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS course_documents (
+    course_id TEXT NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    PRIMARY KEY(course_id, document_id)
+);
+CREATE TABLE IF NOT EXISTS chat_threads (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_threads_doc ON chat_threads(document_id, created_at);
 
 CREATE TABLE IF NOT EXISTS prereq_cache (
     document_id TEXT PRIMARY KEY REFERENCES documents(id) ON DELETE CASCADE,
@@ -280,6 +300,12 @@ def init_db() -> None:
     with _init_lock:
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         with _conn() as conn:
+            # 先备份再修改旧库。此次升级禁止沿用旧迁移的“备份失败仍继续”行为。
+            tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            old_columns = {r[1] for r in conn.execute("PRAGMA table_info(chat_messages)")}
+            if "documents" in tables and ("courses" not in tables or "thread_id" not in old_columns):
+                if _backup_database(conn, "courses-v6") is None:
+                    raise RuntimeError("课程数据升级前备份失败，数据库未升级，请检查备份目录")
             conn.executescript(SCHEMA)
             _ensure_column(conn, "document_versions", "markdown", "TEXT")
             _ensure_column(conn, "blocks", "markdown", "TEXT")
@@ -287,8 +313,21 @@ def init_db() -> None:
             added_render = _ensure_column(conn, "document_versions", "rendered_path", "TEXT")
             if added_render:
                 _backup_database(conn, "phase4-render")
+            _ensure_column(conn, "chat_messages", "thread_id", "TEXT REFERENCES chat_threads(id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_chat_thread ON chat_messages(thread_id, created_at)")
+            # 稳定的默认会话 ID 使重复初始化不会复制历史对话；原消息 ID/时间不变。
+            legacy = conn.execute(
+                "SELECT document_id, MIN(created_at) AS first_at FROM chat_messages "
+                "WHERE thread_id IS NULL GROUP BY document_id"
+            ).fetchall()
+            for row in legacy:
+                thread_id = _default_thread_id(row["document_id"])
+                conn.execute("INSERT OR IGNORE INTO chat_threads VALUES (?, ?, ?, ?, ?)",
+                             (thread_id, row["document_id"], "历史对话", row["first_at"], row["first_at"]))
+                conn.execute("UPDATE chat_messages SET thread_id=? WHERE document_id=? AND thread_id IS NULL",
+                             (thread_id, row["document_id"]))
             conn.execute(
-                "INSERT INTO app_state(key, value) VALUES('schema_version', '5') "
+                "INSERT INTO app_state(key, value) VALUES('schema_version', '6') "
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
             )
 
@@ -822,23 +861,47 @@ def list_note_doc_ids() -> list[str]:
     return [r["document_id"] for r in rows]
 
 
-def get_chat(doc_id: str) -> list[dict]:
+def _default_thread_id(doc_id: str) -> str:
+    return uuid.uuid5(uuid.NAMESPACE_URL, "learning/default-chat/" + doc_id).hex
+
+
+def resolve_thread(doc_id: str, thread_id: Optional[str] = None) -> str:
+    """不传会话时兼容旧客户端；显式会话必须属于当前文档。"""
+    if thread_id:
+        with _conn() as conn:
+            row = conn.execute("SELECT document_id FROM chat_threads WHERE id=?", (thread_id,)).fetchone()
+        if row is None or row["document_id"] != doc_id:
+            raise ValueError("对话不属于当前资料")
+        return thread_id
+    return _default_thread_id(doc_id)
+
+
+def get_chat(doc_id: str, thread_id: Optional[str] = None) -> list[dict]:
+    selected = resolve_thread(doc_id, thread_id)
     with _conn() as conn:
         rows = conn.execute(
             "SELECT role, content, quote, via, created_at FROM chat_messages "
-            "WHERE document_id = ? ORDER BY created_at, id",
-            (doc_id,),
+            "WHERE document_id = ? AND thread_id = ? ORDER BY created_at, rowid",
+            (doc_id, selected),
         ).fetchall()
     return [dict(r) for r in rows]
 
 
-def append_chat(doc_id: str, role: str, content: str, quote: str = "", via: str = "chat") -> None:
+def append_chat(doc_id: str, role: str, content: str, quote: str = "", via: str = "chat",
+                thread_id: Optional[str] = None) -> None:
+    selected = resolve_thread(doc_id, thread_id)
     with _conn() as conn:
+        now = _now()
+        conn.execute("INSERT OR IGNORE INTO chat_threads VALUES (?, ?, ?, ?, ?)",
+                     (selected, doc_id, (content[:40] if role == "user" else "对话") or "对话", now, now))
         conn.execute(
-            "INSERT INTO chat_messages(id, document_id, role, content, quote, via, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (_uid(), doc_id, role, content, quote or "", via or "", _now()),
+            "INSERT INTO chat_messages(id, document_id, role, content, quote, via, created_at, thread_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (_uid(), doc_id, role, content, quote or "", via or "", now, selected),
         )
+        # 第一个问题作为新会话标题；已有标题及历史标题保持稳定。
+        conn.execute("UPDATE chat_threads SET updated_at=?, title=CASE WHEN title='新对话' AND ?='user' "
+                     "THEN ? ELSE title END WHERE id=?", (now, role, content[:40] or "新对话", selected))
 
 
 def reset_chats(doc_id: Optional[str] = None) -> None:
@@ -1251,6 +1314,7 @@ def reset_learning() -> None:
         for table in (
             "notes",
             "chat_messages",
+            "chat_threads",
             "read_records",
             "exercise_state",
             "exercise_history",
@@ -1263,6 +1327,7 @@ def reset_learning() -> None:
         ):
             conn.execute(f"DELETE FROM {table}")
         conn.execute("DELETE FROM app_state WHERE key = 'selected_document_id'")
+        conn.execute("DELETE FROM app_state WHERE key GLOB 'selected_thread:*'")
 
 
 def delete_document(doc_id: str) -> None:
@@ -1332,3 +1397,78 @@ def legacy_document_map() -> dict[str, str]:
             "SELECT legacy_rel, id FROM documents WHERE legacy_rel IS NOT NULL AND legacy_rel <> ''"
         ).fetchall()
     return {r["legacy_rel"]: r["id"] for r in rows}
+
+
+# 课程只组织稳定文档 ID；导入幂等和原文件保存仍由 imports 模块负责。
+def list_courses() -> list[dict]:
+    with _conn() as conn:
+        courses = [dict(row) for row in conn.execute("SELECT * FROM courses ORDER BY created_at, rowid")]
+        links = conn.execute("SELECT course_id, document_id FROM course_documents ORDER BY rowid").fetchall()
+    for course in courses:
+        course["document_ids"] = [row["document_id"] for row in links if row["course_id"] == course["id"]]
+    return courses
+
+
+def get_course(course_id: str) -> Optional[dict]:
+    with _conn() as conn:
+        return _dict(conn.execute("SELECT * FROM courses WHERE id=?", (course_id,)).fetchone())
+
+
+def create_course(title: str) -> dict:
+    title = title.strip()
+    if not title or len(title) > 80:
+        raise ValueError("课程名称须为 1～80 个字符")
+    course_id = _uid()
+    with _conn() as conn:
+        conn.execute("INSERT INTO courses VALUES (?, ?, ?)", (course_id, title, _now()))
+    return get_course(course_id)
+
+
+def link_course_document(course_id: str, doc_id: str) -> None:
+    if get_course(course_id) is None:
+        raise ValueError("课程不存在")
+    if get_document(doc_id) is None:
+        raise ValueError("资料不存在")
+    with _conn() as conn:
+        conn.execute("INSERT OR IGNORE INTO course_documents VALUES (?, ?)", (course_id, doc_id))
+
+
+def list_threads(doc_id: Optional[str] = None) -> list[dict]:
+    with _conn() as conn:
+        sql = ("SELECT t.*, COUNT(m.id) AS message_count FROM chat_threads t "
+               "LEFT JOIN chat_messages m ON m.thread_id=t.id ")
+        rows = conn.execute(sql + ("WHERE t.document_id=? " if doc_id else "") +
+                            "GROUP BY t.id ORDER BY t.created_at, t.rowid", (doc_id,) if doc_id else ()).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_thread(thread_id: str) -> Optional[dict]:
+    with _conn() as conn:
+        return _dict(conn.execute("SELECT * FROM chat_threads WHERE id=?", (thread_id,)).fetchone())
+
+
+def create_thread(doc_id: str, title: str = "新对话") -> dict:
+    if get_document(doc_id) is None:
+        raise ValueError("资料不存在")
+    title = title.strip() or "新对话"
+    if len(title) > 80:
+        raise ValueError("对话名称最多 80 个字符")
+    thread_id, now = _uid(), _now()
+    with _conn() as conn:
+        conn.execute("INSERT INTO chat_threads VALUES (?, ?, ?, ?, ?)", (thread_id, doc_id, title, now, now))
+    return get_thread(thread_id)
+
+
+def selected_thread(doc_id: str) -> Optional[str]:
+    selected = get_state("selected_thread:" + doc_id)
+    if selected:
+        thread = get_thread(selected)
+        if thread and thread["document_id"] == doc_id:
+            return selected
+    threads = list_threads(doc_id)
+    return threads[0]["id"] if threads else None
+
+
+def select_thread(doc_id: str, thread_id: str) -> None:
+    resolve_thread(doc_id, thread_id)
+    set_state("selected_thread:" + doc_id, thread_id)

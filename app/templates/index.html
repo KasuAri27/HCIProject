@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='pages.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='workspace-menu.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/pdfjs/web/pdf_viewer.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='course-workspace.css') }}">
 </head>
 <body>
 
@@ -17,9 +18,9 @@
     <button type="button" id="btn-rail-toggle" class="icon-btn" title="显示或隐藏资料柜" aria-label="资料柜">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 3.5h13v9h-13z"/><path d="M1.5 6.5h13M6 6.5v6"/></svg>
     </button>
-    <span class="brand">学习助手</span>
-    <span class="crumb" id="topbar-crumb" hidden></span>
-    <span class="grow"></span>
+<div class="workspace-global-search"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input id="library-search" type="search" placeholder="搜索课程、资料与正文" autocomplete="off" spellcheck="false" aria-label="搜索课程、资料与正文"></div>
+
+    <span class="grow"></span><button type="button" id="btn-source-toggle" class="workspace-source-toggle" aria-controls="reading" aria-expanded="false">原文</button>
     <button type="button" id="btn-chat-toggle" class="icon-btn pane-toggle" title="收起 AI 侧栏" aria-label="收起 AI 侧栏" aria-expanded="true" aria-controls="rail-right">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <rect x="3.5" y="4.5" width="17" height="15" rx="3"/>
@@ -27,12 +28,7 @@
         <path class="pane-toggle-detail" d="M17.5 8v8"/>
       </svg>
     </button>
-    <button type="button" id="btn-avatar" class="profile-trigger" title="打开设置" aria-label="打开设置" aria-haspopup="dialog" aria-controls="workspace-settings" aria-expanded="false">
-      <span class="topbar-avatar">
-        <img id="topbar-avatar-img" alt="" hidden>
-        <span id="topbar-avatar-initial" aria-hidden="true">读</span>
-      </span>
-    </button>
+
   </header>
 
   <div class="job-strip" id="job-strip" hidden></div>
@@ -40,13 +36,20 @@
   <div class="workbench" id="workbench">
 
     <!-- 左栏：资料柜 -->
-    <aside class="rail rail-left" id="rail-left" aria-label="资料柜">
+    <aside class="rail rail-left edge-panel" data-edge="left" id="rail-left" aria-label="课程与资料">
+      <div class="workspace-identity">    <button type="button" id="btn-avatar" class="profile-trigger" title="打开设置" aria-label="打开设置" aria-haspopup="dialog" aria-controls="workspace-settings" aria-expanded="false">
+      <span class="topbar-avatar">
+        <img id="topbar-avatar-img" alt="" hidden>
+        <span id="topbar-avatar-initial" aria-hidden="true">读</span>
+      </span>
+    </button><span>我的学习空间</span><button type="button" class="icon-btn" id="btn-sidebar-fold" aria-label="收起课程栏"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M8 3v14"/></svg></button></div>
+      <nav class="workspace-nav" aria-label="学习导航">
+        <button type="button" class="is-current" id="btn-courses"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h5l2 1 2-1h5v12h-5l-2 1-2-1H3zM10 5v12"/></svg>课程</button>
+        <button type="button" id="btn-knowledge-sky"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2 2 6 6 2-6 2-2 6-2-6-6-2 6-2zM3 2v3M1.5 3.5h3"/></svg>知识星空图</button>
+      </nav>
       <div class="rail-head">
-        <h2 class="rail-title">资料柜<span class="badge" id="library-count">0</span></h2>
+        <h2 class="rail-title">我的课程<span class="badge" id="library-count" hidden>0</span></h2><button type="button" class="icon-btn" id="btn-create-course" aria-label="创建课程" title="创建课程"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg></button>
         <input id="import-input" type="file" accept=".md,.markdown,.txt,.docx,.pptx,.pdf" multiple hidden>
-      </div>
-      <div class="rail-search">
-        <input id="library-search" type="search" placeholder="搜索资料名或正文" autocomplete="off" spellcheck="false" aria-label="搜索资料名或正文">
       </div>
       <div class="search-panel" id="search-panel" hidden>
         <div class="search-head">
@@ -57,14 +60,20 @@
       </div>
       <div class="rail-alert" id="library-alert" hidden></div>
       <div class="rail-body" id="library-tree">
-        <p class="empty">正在扫描资料库…</p>
+        <p class="empty">正在读取课程与资料…</p>
       </div>
+
     </aside>
 
-    <div class="gutter" id="gutter-left" role="separator" aria-orientation="vertical" tabindex="0" title="拖动调整资料柜宽度"></div>
+    <div class="gutter" id="gutter-left" aria-label="调整课程与原文宽度" aria-controls="rail-left reading" role="separator" aria-orientation="vertical" tabindex="0" title="拖动调整资料柜宽度"></div>
 
     <!-- 中栏：纸面 -->
     <main class="reading" id="reading">
+      <header class="workspace-document-head" id="workspace-document-head">
+        <div class="workspace-breadcrumb"><span>课程</span><span aria-hidden="true">›</span><span id="workspace-course-name">全部资料</span><span aria-hidden="true">›</span><span class="crumb" id="topbar-crumb" hidden></span></div>
+        <h1 id="workspace-document-title">选择一份资料，开始学习</h1>
+        <div class="workspace-document-meta"><button type="button" id="btn-source-close" class="workspace-source-close" aria-label="关闭原文">返回笔记</button><span id="workspace-document-format">阅读与思考，在同一个空间</span><span class="grow"></span><button type="button" class="icon-btn" id="btn-document-chat" aria-label="切换 AI 对话"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M12 3v14"/></svg></button></div>
+      </header>
       <div class="version-note" id="doc-version-note" hidden></div>
 
       <div class="doc-scroll" id="doc-scroll">
@@ -86,11 +95,36 @@
       </div>
     </main>
 
-    <div class="gutter" id="gutter-right" role="separator" aria-orientation="vertical" tabindex="0" title="拖动调整批注栏宽度"></div>
+    <div class="gutter workspace-source-rule" id="gutter-source" role="separator" aria-label="调整原文与笔记宽度" aria-controls="reading notes-rail" aria-orientation="vertical" tabindex="0" title="拖动调整原文与笔记宽度"></div>
+
+    <aside class="workspace-notes-rail" id="notes-rail" aria-label="笔记区">
+      <header class="workspace-notes-head"><h2>笔记</h2><span id="workspace-notes-file"></span></header>
+      <section class="pane is-active" id="pane-notes" role="region" aria-label="笔记">
+        <div class="pane-bar">
+          <span class="save-state" id="notes-save-status"></span>
+          <span class="pane-actions">
+            <button type="button" id="btn-notes-undo" class="btn btn-small btn-quiet" disabled>撤销</button>
+            <button type="button" id="btn-notes-export" class="btn btn-small btn-quiet" disabled>导出</button>
+            <button type="button" id="btn-notes-save" class="btn btn-small" disabled>保存笔记</button>
+          </span>
+        </div>
+        <div class="pane-scroll">
+          <p class="empty" id="notes-empty">选择一份资料</p>
+          <div id="notes-layout" hidden>
+            <textarea id="notes-content" class="notes-area" spellcheck="false" aria-label="笔记正文" placeholder="开始写笔记…"></textarea>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <div class="gutter" id="gutter-right" aria-label="调整笔记与 AI 宽度" aria-controls="notes-rail rail-right" role="separator" aria-orientation="vertical" tabindex="0" title="拖动调整 AI 对话宽度"></div>
 
     <!-- 右栏：批注 -->
-    <aside class="rail rail-right" id="rail-right" aria-label="批注栏">
+    <aside class="rail rail-right edge-panel" data-edge="right" data-slide-state="open" id="rail-right" aria-label="AI 对话栏">
 
+      <header class="workspace-chat-head"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3h14v11H8l-5 3zM6 7h8M6 10h5"/></svg><span id="workspace-chat-title">AI 对话</span><button type="button" class="icon-btn" id="btn-new-thread" aria-label="新建对话" title="新建对话"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg></button><button type="button" class="icon-btn" id="btn-close-chat" aria-label="收起 AI 对话"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M12 3v14"/></svg></button></header>
+      <!-- 对话 -->
+      <section class="pane is-active" id="pane-chat" role="region" aria-label="AI 对话">
       <!-- 划段气泡：停靠在批注栏顶部 -->
       <div class="bubble" id="select-bubble" hidden>
         <div class="bubble-head">
@@ -124,119 +158,25 @@
         </div>
       </div>
 
-      <div class="tabs" role="tablist" aria-label="批注">
-        <button type="button" role="tab" id="tab-chat" class="tab is-active" data-pane="pane-chat" aria-selected="true" aria-controls="pane-chat">对话<span class="tab-badge" id="badge-chat" hidden></span></button>
-        <button type="button" role="tab" id="tab-notes" class="tab" data-pane="pane-notes" aria-selected="false" aria-controls="pane-notes">笔记<span class="tab-dot" id="dot-notes" hidden></span></button>
-        <button type="button" role="tab" id="tab-exercise" class="tab" data-pane="pane-exercise" aria-selected="false" aria-controls="pane-exercise">练习<span class="tab-dot" id="dot-exercise" hidden></span></button>
-        <span class="tab-ink" id="tab-ink" aria-hidden="true"></span>
-      </div>
 
-      <!-- 对话 -->
-      <section class="pane is-active" id="pane-chat" role="tabpanel" aria-labelledby="tab-chat">
         <div class="pane-scroll" id="chat-messages"></div>
         <div class="chat-suggestions" id="chat-suggestions" role="group" aria-label="建议提问"></div>
         <div class="composer">
+          <div class="workspace-chat-context" id="workspace-chat-context" hidden></div>
           <textarea id="chat-input" rows="2" spellcheck="false" placeholder="有疑惑？" aria-label="有疑惑？"></textarea>
           <button type="button" id="btn-chat-send" class="btn btn-primary" disabled>发送</button>
         </div>
       </section>
 
-      <!-- 笔记 -->
-      <section class="pane" id="pane-notes" role="tabpanel" aria-labelledby="tab-notes" hidden>
-        <div class="pane-bar">
-          <span class="save-state" id="notes-save-status"></span>
-          <span class="pane-actions">
-            <button type="button" id="btn-notes-undo" class="btn btn-small btn-quiet" disabled>撤销</button>
-            <button type="button" id="btn-notes-export" class="btn btn-small btn-quiet" disabled>导出</button>
-            <button type="button" id="btn-notes-save" class="btn btn-small" disabled>保存笔记</button>
-          </span>
-        </div>
-        <div class="pane-scroll">
-          <p class="empty" id="notes-empty">打开一份资料后，这里写你自己的笔记。</p>
-          <div id="notes-layout" hidden>
-            <textarea id="notes-content" class="notes-area" spellcheck="false"
-              placeholder="你的笔记。AI 不会自动改这里。"></textarea>
 
-            <div class="notes-ai">
-              <label class="field-label" for="notes-instruction">让 AI 帮写点什么</label>
-              <div class="notes-composer" id="notes-composer">
-                <textarea id="notes-instruction" rows="2" spellcheck="false"
-                  placeholder="例如：把划选整理成三条要点"></textarea>
-                <button type="button" id="btn-notes-draft" class="notes-send" aria-label="发送笔记请求" title="发送" disabled>
-                  <svg class="notes-send-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 15V5m-4 4 4-4 4 4"/></svg>
-                  <svg class="notes-stop-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="5.5" y="5.5" width="9" height="9" rx="1"/></svg>
-                </button>
-              </div>
-              <span class="notes-generation-status" id="notes-generation-status" role="status" aria-live="polite"></span>
-            </div>
-
-            <div class="draft" id="notes-draft-wrap" hidden>
-              <p class="draft-head" id="notes-draft-heading">草稿预览，还没写进笔记</p>
-              <div class="draft-body markdown" id="notes-draft-body"></div>
-              <label class="draft-replace">
-                <input type="checkbox" id="notes-draft-replace"> 替换全文（不勾就追加到末尾）
-              </label>
-              <div class="draft-actions">
-                <button type="button" id="btn-notes-draft-apply" class="btn btn-small btn-primary">写进笔记</button>
-                <button type="button" id="btn-notes-draft-discard" class="btn btn-small btn-quiet">丢掉</button>
-              </div>
-            </div>
-
-            <div class="suggest">
-              <div class="suggest-head">
-                <span>AI 建议</span>
-                <button type="button" id="btn-notes-refresh-suggest" class="btn btn-small btn-quiet" disabled>换一批</button>
-              </div>
-              <div class="suggest-list" id="notes-suggestions-list">
-                <p class="empty">配置 API 后，切到笔记页会自动给建议。</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 练习 -->
-      <section class="pane" id="pane-exercise" role="tabpanel" aria-labelledby="tab-exercise" hidden>
-        <div class="pane-bar">
-          <label class="field-inline" for="exercise-difficulty">难度
-            <select id="exercise-difficulty">
-              <option value="">默认</option>
-              <option value="入门">入门</option>
-              <option value="中等">中等</option>
-              <option value="进阶">进阶</option>
-            </select>
-          </label>
-          <button type="button" id="btn-exercise" class="btn btn-small" disabled>出题</button>
-        </div>
-        <div class="pane-scroll">
-          <div class="question markdown" id="exercise-question">
-            <p class="empty">打开一份资料后可以出题。</p>
-          </div>
-          <div class="answer">
-            <label class="field-label" for="code-editor">你的解答</label>
-            <textarea id="code-editor" class="code-area" spellcheck="false"
-              placeholder="代码题写代码，理论题写推导或简答"></textarea>
-            <button type="button" id="btn-submit" class="btn btn-primary" disabled>提交批改</button>
-          </div>
-          <div class="review markdown" id="exercise-review"></div>
-          <div class="self-rate" id="exercise-self-rate" hidden>
-            <span>这次理解得怎么样？</span>
-            <button type="button" class="btn btn-small" data-level="理解">理解</button>
-            <button type="button" class="btn btn-small" data-level="模糊">模糊</button>
-            <button type="button" class="btn btn-small" data-level="不会">不会</button>
-            <span class="hint" id="exercise-evidence-status"></span>
-          </div>
-          <button type="button" id="btn-exercise-next" class="btn btn-small" hidden>再来一题</button>
-          <div class="review-history">
-            <h3 class="field-label">上次批改</h3>
-            <div class="markdown" id="last-review">
-              <p class="empty">提交解答后，这里显示你的解答和 AI 批改。</p>
-            </div>
-          </div>
-        </div>
-      </section>
     </aside>
   </div>
+
+  <dialog class="workspace-course-dialog" id="course-dialog" aria-labelledby="course-dialog-title">
+    <header><h2 id="course-dialog-title">创建课程</h2><button type="button" class="icon-btn" id="btn-course-cancel" aria-label="关闭创建课程">×</button></header>
+    <form id="course-form"><label for="course-title">课程名称</label><input id="course-title" required maxlength="80" autocomplete="off" placeholder="例如：机器学习"><p class="workspace-form-error" id="course-form-error" role="alert" hidden></p><div class="workspace-form-actions"><button type="submit" class="btn btn-primary" id="btn-course-submit">创建课程</button></div></form>
+  </dialog>
+  <dialog class="workspace-course-dialog" id="knowledge-dialog" aria-labelledby="knowledge-title"><header><h2 id="knowledge-title">知识星空图</h2><button type="button" class="icon-btn" id="btn-knowledge-close" aria-label="关闭知识星空图">×</button></header><p class="workspace-coming-soon">把课程、概念与资料连成星空。这个空间将在后续开放。</p></dialog>
 
   <dialog class="workspace-settings" id="workspace-settings" aria-labelledby="workspace-settings-title">
     <header class="workspace-settings-head">

@@ -82,7 +82,15 @@ def _parse_doc_quote(raw: Any) -> tuple[Optional[dict], Optional[str]]:
     quote = raw.get("quote")
     if quote is not None and not isinstance(quote, str):
         return None, "quote 必须是字符串"
-    return {"doc_id": doc_id, "quote": (quote or "").strip()}, None
+    thread_id = raw.get("thread_id")
+    if thread_id is not None:
+        if not isinstance(thread_id, str) or not thread_id.strip():
+            return None, "thread_id 必须是非空字符串"
+        try:
+            store.resolve_thread(doc_id, thread_id)
+        except ValueError as exc:
+            return None, str(exc)
+    return {"doc_id": doc_id, "quote": (quote or "").strip(), "thread_id": thread_id}, None
 
 
 def parse_suggest_body(raw: Any) -> tuple[Optional[dict], Optional[str]]:
@@ -119,10 +127,10 @@ def _format_chat_excerpt(messages: list) -> str:
     return "\n".join(lines) if lines else "（无当前对话）"
 
 
-def _build_observation_context(doc_id: str, quote: str) -> str:
+def _build_observation_context(doc_id: str, quote: str, thread_id: Optional[str] = None) -> str:
     context = ai_context.build_context(doc_id, question=quote, quote=quote)
     note = store.get_note(doc_id)
-    messages = store.get_chat(doc_id)
+    messages = store.get_chat(doc_id, thread_id)
     submission_hint = explainer.format_last_submission_hint(
         progress.get_last_submission(doc_id), doc_id
     )
@@ -163,8 +171,8 @@ def _normalize_suggestions(raw: Any) -> list[dict[str, str]]:
     return out
 
 
-def suggest(doc_id: str, quote: str = "") -> dict[str, Any]:
-    context = _build_observation_context(doc_id, quote)
+def suggest(doc_id: str, quote: str = "", thread_id: Optional[str] = None) -> dict[str, Any]:
+    context = _build_observation_context(doc_id, quote, thread_id)
     messages = [
         {"role": "system", "content": _SUGGEST_SYSTEM},
         {
@@ -176,8 +184,8 @@ def suggest(doc_id: str, quote: str = "") -> dict[str, Any]:
     return {"doc_id": doc_id, "suggestions": _normalize_suggestions(llm.parse_json(reply))}
 
 
-def _draft_messages(doc_id: str, instruction: str = "", quote: str = "") -> list[dict]:
-    context = _build_observation_context(doc_id, quote)
+def _draft_messages(doc_id: str, instruction: str = "", quote: str = "", thread_id: Optional[str] = None) -> list[dict]:
+    context = _build_observation_context(doc_id, quote, thread_id)
     instr = instruction or _DEFAULT_DRAFT_INSTRUCTION
     return [
         {"role": "system", "content": _DRAFT_SYSTEM},
@@ -188,12 +196,12 @@ def _draft_messages(doc_id: str, instruction: str = "", quote: str = "") -> list
     ]
 
 
-def draft_stream(doc_id: str, instruction: str = "", quote: str = ""):
-    yield from llm.chat_stream(_draft_messages(doc_id, instruction, quote), **api_config.llm_kwargs())
+def draft_stream(doc_id: str, instruction: str = "", quote: str = "", thread_id: Optional[str] = None):
+    yield from llm.chat_stream(_draft_messages(doc_id, instruction, quote, thread_id), **api_config.llm_kwargs())
 
 
-def draft(doc_id: str, instruction: str = "", quote: str = "") -> dict[str, Any]:
-    reply = llm.chat(_draft_messages(doc_id, instruction, quote), **api_config.llm_kwargs())
+def draft(doc_id: str, instruction: str = "", quote: str = "", thread_id: Optional[str] = None) -> dict[str, Any]:
+    reply = llm.chat(_draft_messages(doc_id, instruction, quote, thread_id), **api_config.llm_kwargs())
     text = (reply or "").strip()
     if text.startswith("```") and text.endswith("```"):
         lines = text.split("\n")

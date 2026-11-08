@@ -288,11 +288,13 @@ class FrontendPhase3Tests(unittest.TestCase):
             "check-self-rate",
             "btn-notes-undo",
             "btn-notes-export",
-            "exercise-self-rate",
-            "exercise-evidence-status",
-            "last-review",
+            "notes-rail",
+            "pane-notes",
+            "pane-chat",
         ):
             self.assertIn(f'id="{element_id}"', html, element_id)
+        self.assertNotIn('id="pane-exercise"', html)
+        self.assertNotIn('id="notes-instruction"', html)
 
 
 if __name__ == "__main__":
