@@ -7,85 +7,231 @@
 </head>
 <body>
 <section id="knowledge-sphere-preview" aria-labelledby="ks-title">
-  <header class="ks-header">
-    <h2 id="ks-title">知识体系星空图</h2>
-    <span>示例 · 微积分</span>
-  </header>
   <div class="ks-sky">
     <canvas aria-label="可拖动旋转的三维知识星空图"></canvas>
     <div class="ks-labels"></div>
+    <header class="ks-header">
+      <h2 id="ks-title">知识体系星空图</h2>
+      <span>微积分</span>
+    </header>
     <div class="ks-picker">
       <label for="ks-node">切换节点</label>
       <select id="ks-node"></select>
+    </div>
+    <aside class="ks-panel">
+      <div class="ks-panel-head">
+        <div class="ks-ring" style="--p:0"><b>0</b></div>
+        <div class="ks-titles">
+          <h3 class="ks-node-name"></h3>
+          <span class="ks-state"></span>
+        </div>
+      </div>
+      <dl class="ks-links">
+        <div class="ks-row" data-kind="in"><dt>前置</dt><dd></dd></div>
+        <div class="ks-row" data-kind="out"><dt>解锁</dt><dd></dd></div>
+      </dl>
+    </aside>
+    <div class="ks-legend" role="img" aria-label="节点状态：未解锁、待学习、学习中、已学完、已掌握">
+      <i class="ks-glyph" data-state="locked" title="未解锁"></i>
+      <i class="ks-glyph" data-state="ready" title="待学习"></i>
+      <i class="ks-glyph" data-state="learning" title="学习中"></i>
+      <i class="ks-glyph" data-state="done" title="已学完"></i>
+      <i class="ks-glyph" data-state="mastered" title="已掌握"></i>
     </div>
     <span class="ks-progress" aria-live="polite"></span>
     <div class="ks-error" role="status" hidden></div>
   </div>
 </section>
 <style>
+  /* 设计方向：夜间天球仪。深墨蓝夜空 + 黄铜刻度环 + 会发光的水体；
+     水位表示学习进度，青色为学习中，淡青为学完，琥珀为已掌握。 */
   #knowledge-sphere-preview {
-    color-scheme: light dark;
-    color: light-dark(#172a2a, #e5f0ef);
-    background: light-dark(#fbfcfc, #181e22);
-    border: 1px solid light-dark(#d9e1e0, #3a484c);
-    border-radius: 16px;
+    --ks-ink: #060c17;
+    --ks-brass: #d8b87a;
+    --ks-teal: #5fd3d6;
+    --ks-text: #e8f1f0;
+    --ks-muted: #8aa3aa;
+    --ks-sans: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+    --ks-serif: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", "SimSun", serif;
+    --ks-mono: "Cascadia Mono", "SF Mono", Consolas, "Liberation Mono", monospace;
+    container-type: inline-size;
+    position: relative;
     overflow: hidden;
-    font: 14px/1.5 system-ui, sans-serif;
+    color: var(--ks-text);
+    background: var(--ks-ink);
+    border: 1px solid rgba(216, 184, 122, 0.2);
+    border-radius: 18px;
+    box-shadow: 0 28px 60px -34px rgba(2, 8, 16, 0.8);
+    font: 13px/1.5 var(--ks-sans);
   }
   #knowledge-sphere-preview * { box-sizing: border-box; }
-  #knowledge-sphere-preview [hidden] { display: none; }
-  #knowledge-sphere-preview .ks-header {
-    padding: 14px 18px; display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px;
-  }
-  #knowledge-sphere-preview h2 { margin: 0; font-size: 16px; font-weight: 650; }
-  #knowledge-sphere-preview .ks-header span { color: light-dark(#526668, #a7b8bc); font-size: 12px; }
+  #knowledge-sphere-preview [hidden] { display: none !important; }
   #knowledge-sphere-preview .ks-sky {
-    position: relative; min-width: 0; height: clamp(360px, 62vw, 540px); color: #e4f6f4;
-    background: #3a4b58;
+    position: relative; min-width: 0; height: clamp(460px, 66vw, 660px);
+    background: radial-gradient(120% 90% at 50% 40%, #0b1a2b 0%, var(--ks-ink) 70%);
   }
-  #knowledge-sphere-preview canvas, #knowledge-sphere-preview .ks-labels {
-    position: absolute; inset: 0; display: block; width: 100%; height: 100%;
-  }
+  #knowledge-sphere-preview canvas,
+  #knowledge-sphere-preview .ks-labels { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
   #knowledge-sphere-preview canvas { touch-action: pinch-zoom; cursor: grab; }
   #knowledge-sphere-preview canvas:active { cursor: grabbing; }
+  /* 暗角把视线收向球体，同时给四角的控件留出安静的底色 */
+  #knowledge-sphere-preview .ks-sky::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(85% 85% at 50% 48%, transparent 55%, rgba(2, 6, 12, 0.62) 100%);
+  }
   #knowledge-sphere-preview .ks-labels { pointer-events: none; overflow: hidden; }
+
+  /* 节点标签：名称用黑体保证小字号清晰，数字用等宽体，像仪表读数 */
   #knowledge-sphere-preview .ks-marker { position: absolute; width: 0; height: 0; white-space: nowrap; }
-  #knowledge-sphere-preview .ks-number, #knowledge-sphere-preview .ks-name {
-    position: absolute; left: 0; text-shadow: 0 1px 4px #03101c, 0 0 8px #03101c;
+  #knowledge-sphere-preview .ks-number,
+  #knowledge-sphere-preview .ks-name {
+    position: absolute; left: 0;
+    text-shadow: 0 0 6px rgba(3, 10, 20, 0.95), 0 1px 2px rgba(3, 10, 20, 0.9);
   }
   #knowledge-sphere-preview .ks-number {
     top: 0; transform: translate(-50%, -50%); color: #fbfffe;
-    font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums;
+    font: 600 10.5px/1 var(--ks-mono); letter-spacing: 0.02em;
   }
   #knowledge-sphere-preview .ks-name {
-    top: calc(var(--node-radius) + 7px); transform: translateX(-50%);
-    color: #dcefeb; font-size: 12px;
+    top: calc(var(--node-radius) + 8px); transform: translateX(-50%);
+    color: #d4e6e4; font-size: 12.5px; letter-spacing: 0.08em;
   }
-  #knowledge-sphere-preview .ks-marker[data-selected="true"] .ks-name { color: #ffe5a8; }
-  #knowledge-sphere-preview .ks-picker {
-    position: absolute; right: 12px; top: 12px; display: flex; align-items: center; gap: 6px; font-size: 12px;
+  /* 选中节点外有刻度圈（半径约 1.75 倍），名称要落在圈外 */
+  #knowledge-sphere-preview .ks-marker[data-selected="true"] .ks-name {
+    top: calc(var(--node-radius) * 1.8 + 6px); color: #f6dfb0; font-weight: 600;
+  }
+
+  /* 左上：标题与一条渐隐的黄铜细线 */
+  #knowledge-sphere-preview .ks-header { position: absolute; z-index: 3; left: 22px; top: 18px; pointer-events: none; }
+  #knowledge-sphere-preview h2 {
+    margin: 0; font: 600 20px/1.2 var(--ks-serif); letter-spacing: 0.14em; color: #f1ead9;
+  }
+  #knowledge-sphere-preview .ks-header span {
+    display: block; margin-top: 8px; padding-top: 7px; min-width: 150px; color: var(--ks-brass);
+    font-size: 12px; letter-spacing: 0.3em;
+    background: linear-gradient(90deg, rgba(216, 184, 122, 0.7), transparent) top / 100% 1px no-repeat;
+  }
+
+  /* 右上：节点选择器，保留原生 select 以便键盘与读屏操作 */
+  #knowledge-sphere-preview .ks-picker { position: absolute; z-index: 3; right: 16px; top: 16px; }
+  #knowledge-sphere-preview .ks-picker label {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
   }
   #knowledge-sphere-preview select {
-    color-scheme: dark; font: inherit; color: #d9eeed; background: #102a35;
-    border: 1px solid #38525c; border-radius: 7px; min-height: 32px; padding: 4px 9px;
+    appearance: none; color-scheme: dark; font: inherit; color: var(--ks-text);
+    min-height: 32px; padding: 4px 30px 4px 14px; cursor: pointer;
+    background: rgba(8, 18, 30, 0.66) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%23d8b87a' stroke-width='1.5'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E") right 12px center / 10px no-repeat;
+    border: 1px solid rgba(216, 184, 122, 0.3); border-radius: 999px;
+    backdrop-filter: blur(8px);
+    transition: border-color 0.2s;
   }
+  #knowledge-sphere-preview select:hover { border-color: rgba(216, 184, 122, 0.6); }
+  #knowledge-sphere-preview select:focus-visible,
+  #knowledge-sphere-preview .ks-chip:focus-visible { outline: 2px solid var(--ks-brass); outline-offset: 2px; }
+
+  /* 左下：当前节点的详情，进度环 + 前置/解锁关系，点击即可跳转 */
+  #knowledge-sphere-preview .ks-panel {
+    --c: var(--ks-teal);
+    position: absolute; z-index: 3; left: 16px; bottom: 16px; width: min(268px, calc(100% - 32px));
+    padding: 14px 16px 12px; border-radius: 16px;
+    background: linear-gradient(160deg, rgba(14, 30, 46, 0.74), rgba(7, 15, 26, 0.82));
+    border: 1px solid rgba(216, 184, 122, 0.24);
+    box-shadow: 0 20px 40px -22px #000, inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(14px) saturate(1.2);
+  }
+  #knowledge-sphere-preview .ks-panel[data-state="mastered"] { --c: #ffb347; }
+  #knowledge-sphere-preview .ks-panel[data-state="done"] { --c: #9fe6ec; }
+  #knowledge-sphere-preview .ks-panel[data-state="ready"],
+  #knowledge-sphere-preview .ks-panel[data-state="locked"] { --c: #6d8791; }
+  #knowledge-sphere-preview .ks-panel-head { display: flex; align-items: center; gap: 14px; }
+  #knowledge-sphere-preview .ks-ring { position: relative; flex: none; width: 48px; height: 48px; display: grid; place-items: center; }
+  #knowledge-sphere-preview .ks-ring::before {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(var(--c) calc(var(--p) * 1%), rgba(255, 255, 255, 0.1) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+  }
+  #knowledge-sphere-preview .ks-ring b { position: relative; font: 600 14px/1 var(--ks-mono); color: #fff; }
+  #knowledge-sphere-preview .ks-ring b::after { content: "%"; margin-left: 1px; font-size: 8px; color: var(--ks-muted); }
+  #knowledge-sphere-preview .ks-titles { min-width: 0; }
+  #knowledge-sphere-preview .ks-node-name {
+    margin: 0; font: 600 22px/1.2 var(--ks-serif); letter-spacing: 0.06em; color: #f4efe2;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #knowledge-sphere-preview .ks-state {
+    display: inline-flex; align-items: center; gap: 7px; margin-top: 3px; color: var(--ks-muted); font-size: 12px; letter-spacing: 0.12em;
+  }
+  #knowledge-sphere-preview .ks-state::before { content: ""; width: 8px; height: 8px; border-radius: 50%; }
+  #knowledge-sphere-preview .ks-links { margin: 12px 0 0; display: grid; gap: 8px; }
+  #knowledge-sphere-preview .ks-row { display: flex; align-items: baseline; gap: 10px; }
+  #knowledge-sphere-preview .ks-row dt { flex: none; width: 3em; color: var(--ks-brass); font-size: 11px; letter-spacing: 0.12em; white-space: nowrap; }
+  #knowledge-sphere-preview .ks-row dd { margin: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  #knowledge-sphere-preview .ks-chip {
+    font: inherit; font-size: 12px; color: var(--ks-text); cursor: pointer;
+    padding: 1px 10px; border-radius: 999px;
+    background: rgba(95, 211, 214, 0.08); border: 1px solid rgba(95, 211, 214, 0.3);
+    transition: background 0.2s, border-color 0.2s;
+  }
+  #knowledge-sphere-preview .ks-chip:hover:not(:disabled) { background: rgba(95, 211, 214, 0.2); border-color: rgba(95, 211, 214, 0.6); }
+  #knowledge-sphere-preview .ks-chip[data-state="mastered"] { border-color: rgba(255, 179, 71, 0.45); background: rgba(255, 179, 71, 0.08); }
+  #knowledge-sphere-preview .ks-chip:disabled { cursor: default; color: var(--ks-muted); background: none; border: 1px dashed rgba(138, 163, 170, 0.4); }
+
+  /* 状态图例：只用图形，含义靠悬停提示和读屏文字 */
+  #knowledge-sphere-preview .ks-legend { position: absolute; z-index: 3; right: 20px; bottom: 20px; display: flex; gap: 14px; }
+  #knowledge-sphere-preview .ks-glyph,
+  #knowledge-sphere-preview .ks-state::before {
+    display: block; width: 10px; height: 10px; border-radius: 50%;
+    border: 1.5px solid #6fb4c0; background: transparent;
+  }
+  #knowledge-sphere-preview .ks-glyph[data-state="locked"] { border: 1.5px dashed #5b7480; }
+  #knowledge-sphere-preview .ks-glyph[data-state="learning"] { background: linear-gradient(to top, #35c4c9 55%, transparent 55%); border-color: #35c4c9; }
+  #knowledge-sphere-preview .ks-glyph[data-state="done"] { background: #9fe6ec; border-color: #9fe6ec; box-shadow: 0 0 8px rgba(159, 230, 236, 0.6); }
+  #knowledge-sphere-preview .ks-glyph[data-state="mastered"] { background: #ffb347; border-color: #ffb347; box-shadow: 0 0 10px rgba(255, 179, 71, 0.8); }
+  #knowledge-sphere-preview .ks-state::before { border: 1.5px solid #6fb4c0; }
+  #knowledge-sphere-preview .ks-state[data-state="locked"]::before { border: 1.5px dashed #5b7480; }
+  #knowledge-sphere-preview .ks-state[data-state="learning"]::before { background: linear-gradient(to top, #35c4c9 55%, transparent 55%); border-color: #35c4c9; }
+  #knowledge-sphere-preview .ks-state[data-state="done"]::before { background: #9fe6ec; border-color: #9fe6ec; }
+  #knowledge-sphere-preview .ks-state[data-state="mastered"]::before { background: #ffb347; border-color: #ffb347; box-shadow: 0 0 8px rgba(255, 179, 71, 0.7); }
+
   #knowledge-sphere-preview .ks-progress {
     position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
   }
-  #knowledge-sphere-preview .ks-error { position: absolute; inset: 50% 0 auto; text-align: center; }
+  #knowledge-sphere-preview .ks-error { position: absolute; z-index: 4; inset: 50% 0 auto; text-align: center; color: var(--ks-muted); }
+
+  /* 窄容器：详情面板铺满底部，图例让位 */
+  @container (max-width: 560px) {
+    /* 球体按宽度取景，加高舞台，给底部通栏的详情面板腾出位置 */
+    #knowledge-sphere-preview .ks-sky { height: 640px; }
+    #knowledge-sphere-preview .ks-panel { left: 10px; right: 10px; bottom: 10px; width: auto; }
+    #knowledge-sphere-preview .ks-legend { display: none; }
+    #knowledge-sphere-preview .ks-header { left: 16px; top: 14px; }
+    #knowledge-sphere-preview h2 { font-size: 17px; }
+  }
   @media (pointer: coarse) {
     #knowledge-sphere-preview select { min-height: 44px; font-size: 16px; }
+    #knowledge-sphere-preview .ks-chip { min-height: 32px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #knowledge-sphere-preview * { transition: none !important; }
   }
 </style>
 <script>
 (async () => {
   const root = document.getElementById("knowledge-sphere-preview");
-  const canvas = root.querySelector("canvas");
-  const stage = root.querySelector(".ks-sky");
-  const picker = root.querySelector("select");
-  const labels = root.querySelector(".ks-labels");
-  const progressLabel = root.querySelector(".ks-progress");
-  const error = root.querySelector(".ks-error");
+  const $ = selector => root.querySelector(selector);
+  const canvas = $("canvas");
+  const stage = $(".ks-sky");
+  const picker = $("select");
+  const labels = $(".ks-labels");
+  const progressLabel = $(".ks-progress");
+  const error = $(".ks-error");
+  const panel = $(".ks-panel");
+  const ringEl = $(".ks-ring");
+  const ringValue = $(".ks-ring b");
+  const nodeName = $(".ks-node-name");
+  const stateTag = $(".ks-state");
+  const rowIn = $('.ks-row[data-kind="in"]');
+  const rowOut = $('.ks-row[data-kind="out"]');
   const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
   let THREE, renderer;
   try {
@@ -104,6 +250,7 @@
   const pointer = new THREE.Vector2();
   const centerId = 0;
   const rad = Math.PI / 180;
+  // [名称, 纬度, 经度, 前置节点, 进度, 已掌握?]
   const concepts = [
     ["函数", 0, 0, [], 64],
     ["极限", 43, 10, [0], 100, true],
@@ -130,6 +277,7 @@
     ["最优化", -19, -157, [7, 21], 0],
     ["曲线弧长", -67, -147, [11, 3], 0],
   ];
+  // 边的方向是「前置 → 后续」，流光沿这个方向移动
   const edges = concepts.flatMap((node, to) => node[3].map(from => [from, to]));
   const reachable = new Set();
   for (const [from, to] of edges) {
@@ -137,6 +285,12 @@
     if (concepts[to][4] === 100) reachable.add(from);
   }
   const displayName = id => concepts[id][4] > 0 || reachable.has(id) ? concepts[id][0] : "???";
+  const isLocked = id => displayName(id) === "???";
+  const stateOf = id => concepts[id][5] ? "mastered" : concepts[id][4] === 100 ? "done"
+    : concepts[id][4] > 0 ? "learning" : isLocked(id) ? "locked" : "ready";
+  const STATE_LABEL = { locked: "未解锁", ready: "待学习", learning: "学习中", done: "已学完", mastered: "已掌握" };
+  // 水体与光晕的颜色按状态区分：青色学习中，淡青学完，琥珀已掌握
+  const TINT = { learning: "#2ab3bd", done: "#8fe3ea", mastered: "#ffb347" };
   const positions = concepts.map(([, lat, lon], id) => {
     if (id === centerId) return new THREE.Vector3();
     return new THREE.Vector3(
@@ -145,20 +299,44 @@
       Math.cos(lat * rad) * Math.cos(lon * rad),
     ).multiplyScalar(1.22);
   });
+  const smooth = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+  const wrapAngle = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
+  const easeOutBack = x => 1 + 2.70158 * (x - 1) ** 3 + 1.70158 * (x - 1) ** 2;
 
-  const frostEnvironment = `
-    vec3 frostColor(vec3 direction, float roughness) {
+  /* ---------- 共用 GLSL 片段 ---------- */
+  // 夜间影棚环境：左上冷白主光 + 右后暖铜补光，玻璃与水面都从这里取反射
+  const studioEnvironment = `
+    vec3 studio(vec3 direction, float roughness) {
       vec3 d = normalize(direction);
       vec3 key = normalize(vec3(-0.50, 0.79, 0.38));
       vec3 fill = normalize(vec3(0.66, 0.23, -0.72));
-      float soft = 0.038 + 0.041 * (d.y * 0.5 + 0.5)
-        + 0.038 * pow(max(dot(d, fill), 0.0), 2.0);
-      float reflection = mix(0.62, 0.038, roughness)
-        * pow(max(dot(d, key), 0.0), mix(30.0, 5.0, roughness));
-      reflection += mix(0.21, 0.025, roughness)
-        * pow(max(dot(d, fill), 0.0), mix(18.0, 4.0, roughness));
-      return (soft + reflection) * vec3(0.65, 0.82, 1.0);
+      float ambient = 0.05 + 0.05 * (d.y * 0.5 + 0.5);
+      float k = mix(0.70, 0.05, roughness) * pow(max(dot(d, key), 0.0), mix(28.0, 5.0, roughness));
+      float r = mix(0.30, 0.04, roughness) * pow(max(dot(d, fill), 0.0), mix(16.0, 4.0, roughness));
+      return vec3(0.34, 0.56, 0.72) * ambient * 2.0 + vec3(0.78, 0.92, 1.0) * k + vec3(1.0, 0.72, 0.40) * r;
     }`;
+  const noiseLibrary = `
+    float hash13(vec3 p) {
+      p = fract(p * 0.1031);
+      p += dot(p, p.zyx + 31.32);
+      return fract((p.x + p.y) * p.z);
+    }
+    float vnoise(vec3 p) {
+      vec3 i = floor(p);
+      vec3 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(
+        mix(mix(hash13(i), hash13(i + vec3(1, 0, 0)), f.x), mix(hash13(i + vec3(0, 1, 0)), hash13(i + vec3(1, 1, 0)), f.x), f.y),
+        mix(mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), f.x), mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), f.x), f.y),
+        f.z);
+    }
+    float fbm(vec3 p) {
+      float amplitude = 0.5, sum = 0.0;
+      for (int i = 0; i < 4; i++) { sum += amplitude * vnoise(p); p = p * 2.03 + 7.1; amplitude *= 0.5; }
+      return sum;
+    }`;
+
+  /* ---------- 夜空：渐变底色 + 银河尘带 + 两层程序化星点 ---------- */
   const sky = new THREE.Mesh(new THREE.SphereGeometry(22, 32, 20), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false,
     vertexShader: `
@@ -169,46 +347,101 @@
       }`,
     fragmentShader: `
       varying vec3 vDirection;
-      ${frostEnvironment}
+      ${noiseLibrary}
+      // 把方向放大后按整数格子撒星：每格最多一颗，位置在格内抖动，避免出现网格感
+      vec3 starLayer(vec3 d, float scale, float density, float size) {
+        vec3 x = d * scale;
+        vec3 cell = floor(x);
+        float h = hash13(cell);
+        if (h < 1.0 - density) return vec3(0.0);
+        vec3 jitter = vec3(hash13(cell + 11.3), hash13(cell + 23.7), hash13(cell + 37.1));
+        float r = length(x - (cell + 0.2 + 0.6 * jitter));
+        float lum = mix(0.25, 1.0, fract(h * 91.7));
+        vec3 tint = mix(vec3(0.70, 0.85, 1.0), vec3(1.0, 0.86, 0.66), step(0.72, fract(h * 13.1)));
+        return tint * smoothstep(size, 0.0, r) * lum * 1.25;
+      }
       void main() {
-        vec3 color = frostColor(vDirection, 1.0);
+        vec3 d = normalize(vDirection);
+        vec3 color = mix(vec3(0.0016, 0.0035, 0.0085), vec3(0.0075, 0.0185, 0.034), smoothstep(-0.8, 0.9, d.y));
+        vec3 axis = normalize(vec3(0.35, 0.80, -0.50));
+        float band = exp(-pow(dot(d, axis) * 2.6, 2.0));
+        float cloud = smoothstep(0.34, 0.86, fbm(d * 2.4 + 3.0));
+        vec3 dust = mix(vec3(0.010, 0.060, 0.070), vec3(0.040, 0.030, 0.095), fbm(d * 3.1 + 17.0));
+        color += dust * band * cloud * 1.4;
+        color += starLayer(d, 55.0, 0.07, 0.16);
+        color += starLayer(d, 130.0, 0.045, 0.2) * 0.55;
+        // 暗部很容易出现色带，叠一点极小的噪声抖动
         float grain = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
-        gl_FragColor = vec4(color * (0.98 + grain * 0.04), 1.0);
+        gl_FragColor = vec4(color + (grain - 0.5) * 0.0008, 1.0);
         #include <colorspace_fragment>
       }`,
   }));
   sky.renderOrder = -3;
   scene.add(sky);
 
-  const sphereGeometry = new THREE.SphereGeometry(1, 40, 28);
-  const glassMaterial = new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
+  // 球体外缘一圈很淡的大气光，让整体读成「一个球」而不是散点。
+  // 做成穿过球心、始终朝向相机的圆片：边缘亮环 + 向内渐隐的薄雾，
+  // 薄雾位于前后半球之间，顺带给远侧节点一点景深。
+  const ATMOSPHERE_RADIUS = 1.36;
+  const atmosphere = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: `
-      varying vec3 vN;
-      varying vec3 vV;
+      varying vec2 vUv;
       void main() {
-        vec4 p = modelViewMatrix * vec4(position, 1.0);
-        vN = normalize(normalMatrix * normal);
-        vV = -p.xyz;
-        gl_Position = projectionMatrix * p;
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: `
-      varying vec3 vN;
-      varying vec3 vV;
-      ${frostEnvironment}
+      varying vec2 vUv;
       void main() {
-        vec3 n = normalize(vN);
-        vec3 v = normalize(vV);
-        float rim = pow(1.0 - max(dot(n, v), 0.0), 2.7);
-        vec3 reflected = frostColor(reflect(-v, n) * mat3(viewMatrix), 0.12);
-        float glint = smoothstep(0.07, 0.40, max(reflected.r, reflected.b));
-        gl_FragColor = vec4(reflected * (1.18 + 0.90 * rim), min(0.92, 0.012 + 0.74 * rim + 0.77 * glint));
+        float r = length((vUv - 0.5) * 2.0);
+        float rim = exp(-pow((r - 0.975) / 0.022, 2.0));
+        float haze = smoothstep(0.5, 0.98, r);
+        float inside = 1.0 - smoothstep(0.985, 1.02, r);
+        gl_FragColor = vec4(vec3(0.10, 0.46, 0.56) * (rim * 0.05 + haze * 0.006) * inside, 1.0);
         #include <colorspace_fragment>
       }`,
-  });
+  }));
+  atmosphere.renderOrder = -2;
+  scene.add(atmosphere);
 
-  // Both meshes share the moving boundary, so the surface stays joined to the liquid body.
+  /* ---------- 节点：玻璃壳 + 会发光的水体 ---------- */
+  const sphereGeometry = new THREE.SphereGeometry(1, 40, 28);
+  // 每个节点一份材质：未解锁的节点用 uDim 压暗，其余共享同一套着色
+  function glassMaterial(dim) {
+    return new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: { uDim: { value: dim } },
+      vertexShader: `
+        varying vec3 vN;
+        varying vec3 vV;
+        void main() {
+          vec4 p = modelViewMatrix * vec4(position, 1.0);
+          vN = normalize(normalMatrix * normal);
+          vV = -p.xyz;
+          gl_Position = projectionMatrix * p;
+        }`,
+      fragmentShader: `
+        uniform float uDim;
+        varying vec3 vN;
+        varying vec3 vV;
+        ${studioEnvironment}
+        void main() {
+          vec3 n = normalize(vN);
+          vec3 v = normalize(vV);
+          float rim = pow(1.0 - max(dot(n, v), 0.0), 2.4);
+          vec3 reflected = studio(reflect(-v, n) * mat3(viewMatrix), 0.10);
+          float glint = smoothstep(0.08, 0.45, max(reflected.r, reflected.b));
+          vec3 color = reflected * (1.1 + rim) + vec3(0.45, 0.78, 0.9) * rim * 0.4;
+          float alpha = min(0.92, 0.03 + 0.70 * rim + 0.80 * glint);
+          gl_FragColor = vec4(color, alpha * uDim);
+          #include <colorspace_fragment>
+        }`,
+    });
+  }
+
+  // 水面和水体共用同一条动态边界，所以液面始终与水体贴合
   function liquidGeometry() {
     const coordinates = [], surface = [], indices = [];
     const segments = 40, rings = 16, stride = segments + 1;
@@ -280,24 +513,29 @@
     }`;
   const fluidFragment = `
     uniform float level;
+    uniform vec3 tint;
     varying vec3 vP;
     varying vec3 vN;
     varying vec3 vV;
     varying float vSurface;
-    ${frostEnvironment}
+    ${studioEnvironment}
     void main() {
       vec3 n = normalize(vN);
       vec3 v = normalize(vV);
-      // Only the matte environment contributes to the water. The graph is drawn independently.
-      vec3 through = frostColor(refract(-v, n, 1.0 / 1.333) * mat3(viewMatrix), 1.0);
-      vec3 reflected = frostColor(reflect(-v, n) * mat3(viewMatrix), 0.22);
-      float rim = pow(1.0 - max(dot(n, v), 0.0), 3.2);
+      float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0);
       float depth = smoothstep(0.08, 1.45, max(0.0, level - vP.y));
-      float reflection = min(0.92, 0.16 + vSurface * 0.32 + rim * 0.61);
-      vec3 color = mix(through * (0.88 - depth * 0.15), reflected, reflection);
+      // 发光水体：越靠近水面越亮，越深越暗，边缘用菲涅尔抬亮
+      vec3 body = tint * (1.45 - 0.95 * depth);
+      vec3 abyss = tint * vec3(0.25, 0.45, 0.8) * 0.45;
+      vec3 through = mix(body, abyss, depth * 0.55) + tint * rim * 0.6;
+      vec3 reflected = studio(reflect(-v, n) * mat3(viewMatrix), 0.22);
+      float reflection = min(0.8, 0.08 + vSurface * 0.30 + rim * 0.45);
+      vec3 color = mix(through, reflected, reflection);
       vec3 surfaceNormal = n * mat3(viewMatrix);
-      float broadGlint = vSurface * (0.12 + 0.10 * max(surfaceNormal.y, 0.0));
-      color = mix(color, frostColor(vec3(-0.50, 0.79, 0.38), 0.43), broadGlint);
+      float broadGlint = vSurface * (0.12 + 0.12 * max(surfaceNormal.y, 0.0));
+      color = mix(color, studio(vec3(-0.50, 0.79, 0.38), 0.43), broadGlint);
+      // 水面自带一圈亮边，进度高低一眼可读
+      color += tint * vSurface * 0.35;
       gl_FragColor = vec4(color, 1.0);
       #include <colorspace_fragment>
     }`;
@@ -315,11 +553,11 @@
       gl_Position = projectionMatrix * view;
     }`;
   const haloGeometry = new THREE.PlaneGeometry(2, 2);
-  function createHalo(mastered, seed) {
+  function createHalo(color, seed) {
     const material = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       uniforms: {
-        color: { value: new THREE.Color(mastered ? "#ffc05b" : "#d8ebff") },
+        color: { value: new THREE.Color(color) },
         seed: { value: seed * 1.618 },
       },
       vertexShader: `
@@ -361,7 +599,7 @@
         }`,
     });
     const halo = new THREE.Mesh(haloGeometry, material);
-    halo.scale.setScalar(3.25);
+    halo.scale.setScalar(3.4);
     halo.renderOrder = 3;
     return halo;
   }
@@ -369,18 +607,21 @@
   const records = positions.map((position, id) => {
     const group = new THREE.Group();
     group.position.copy(position);
+    group.scale.setScalar(1e-4);
     scene.add(group);
-    const glass = new THREE.Mesh(sphereGeometry, glassMaterial);
+    const state = stateOf(id);
+    const glass = new THREE.Mesh(sphereGeometry, glassMaterial(state === "locked" ? 0.42 : 1));
     glass.userData.id = id;
     glass.renderOrder = 1;
     group.add(glass);
     const progress = concepts[id][4] / 100;
     let uniforms = null;
     if (progress > 0) {
-      // Solve the spherical-cap volume for its equilibrium liquid height.
+      // 由球冠体积反解水位高度，保证水量与进度成正比
       const level = -0.925 * 2 * Math.sin(Math.asin(1 - 2 * progress) / 3);
       uniforms = {
         level: { value: level }, phase: { value: 0 }, energy: { value: 0 }, tilt: { value: 0 },
+        tint: { value: new THREE.Color(TINT[state]) },
       };
       const full = progress === 1;
       const liquid = new THREE.Mesh(full ? sphereGeometry : fluidGeometry, new THREE.ShaderMaterial({
@@ -389,7 +630,7 @@
       if (full) liquid.scale.setScalar(0.925);
       group.add(liquid);
     }
-    const halo = progress === 1 ? createHalo(concepts[id][5] === true, id) : null;
+    const halo = progress === 1 ? createHalo(state === "mastered" ? "#ffb85a" : "#8fdde6", id) : null;
     if (halo) group.add(halo);
     const marker = document.createElement("div");
     marker.className = "ks-marker";
@@ -406,57 +647,167 @@
   });
   const pickTargets = records.map(record => record.glass);
 
-  function edgeLines(color, opacity) {
+  /* ---------- 连线：贴着球面的弧线 + 沿前置→后续方向流动的光点 ---------- */
+  // 三类线共用同一套着色：按到相机的距离淡出远侧，并可叠加流光
+  const shared = { uTime: { value: 0 }, uCamDist: { value: 4 }, uReveal: { value: 0 } };
+  function lineMaterial(color, alpha, flow) {
+    return new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      uniforms: { ...shared, uColor: { value: new THREE.Color(color) }, uAlpha: { value: alpha }, uFlow: { value: flow } },
+      vertexShader: `
+        attribute float aS;
+        uniform float uCamDist;
+        varying float vS;
+        varying float vFade;
+        void main() {
+          vec4 view = modelViewMatrix * vec4(position, 1.0);
+          vS = aS;
+          vFade = mix(1.0, 0.28, smoothstep(uCamDist - 0.9, uCamDist + 1.25, length(view.xyz)));
+          gl_Position = projectionMatrix * view;
+        }`,
+      fragmentShader: `
+        uniform vec3 uColor;
+        uniform float uAlpha;
+        uniform float uFlow;
+        uniform float uTime;
+        uniform float uReveal;
+        varying float vS;
+        varying float vFade;
+        void main() {
+          // fract 的值随弧长递增，pow 把它压成「亮头 + 长尾」的彗星形状
+          float comet = pow(fract(vS * 1.5 - uTime * 0.45), 10.0);
+          float alpha = uAlpha * vFade * (1.0 + uFlow * 3.2 * comet) * uReveal;
+          vec3 color = mix(uColor, vec3(1.0, 0.95, 0.80), uFlow * comet * 0.7);
+          gl_FragColor = vec4(color, clamp(alpha, 0.0, 1.0));
+          #include <colorspace_fragment>
+        }`,
+    });
+  }
+  const ARC_STEPS = 20;
+  function linesWithCapacity(segmentCount, material) {
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(edges.length * 6), 3));
-    const lines = new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({
-      color, transparent: true, opacity, depthWrite: false,
-    }));
+    geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(segmentCount * 6), 3));
+    geometry.setAttribute("aS", new THREE.BufferAttribute(new Float32Array(segmentCount * 2), 1));
+    const lines = new THREE.LineSegments(geometry, material);
     lines.frustumCulled = false;
     scene.add(lines);
     return lines;
   }
-  const mutedLines = edgeLines("#5c9ab6", 0.32);
-  const activeLines = edgeLines("#e7c77e", 0.76);
-  for (const tilt of [0.23, 0.98, 1.82]) {
-    const ring = Array.from({ length: 96 }, (_, i) => {
-      const angle = i * Math.PI / 48;
-      return new THREE.Vector3(Math.cos(angle) * 1.23, 0, Math.sin(angle) * 1.23)
-        .applyAxisAngle(new THREE.Vector3(1, 0, 0), tilt);
-    });
-    scene.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ring),
-      new THREE.LineBasicMaterial({ color: "#5196a7", transparent: true, opacity: 0.16, depthWrite: false })));
+  const mutedLines = linesWithCapacity(edges.length * ARC_STEPS, lineMaterial("#4f9bb0", 0.4, 0));
+  const activeLines = linesWithCapacity(edges.length * ARC_STEPS, lineMaterial("#f0cf8b", 0.8, 1));
+
+  // 球面上两点之间取大圆弧；与中心枢纽相连的边保持直线（辐条）
+  function arcPoint(a, b, t, out) {
+    if (a.lengthSq() < 1e-6 || b.lengthSq() < 1e-6) return out.lerpVectors(a, b, t);
+    const omega = Math.acos(THREE.MathUtils.clamp(a.dot(b) / (a.length() * b.length()), -1, 1));
+    const w = Math.sin(omega) || 1e-6;
+    out.copy(a).multiplyScalar(Math.sin((1 - t) * omega) / w).addScaledVector(b, Math.sin(t * omega) / w);
+    // 弧线中段略微外抬，像悬在球面上方的轨道
+    return out.multiplyScalar(1 + 0.035 * Math.sin(Math.PI * t));
+  }
+  function arcLength(a, b) {
+    if (a.lengthSq() < 1e-6 || b.lengthSq() < 1e-6) return a.distanceTo(b);
+    return Math.acos(THREE.MathUtils.clamp(a.dot(b) / (a.length() * b.length()), -1, 1)) * a.length();
+  }
+  const arcScratch = new THREE.Vector3();
+  const targets = new Float32Array(concepts.length).fill(0.06);
+  function fillLines(lines, list) {
+    const position = lines.geometry.attributes.position;
+    const along = lines.geometry.attributes.aS;
+    let vertex = 0;
+    for (const [from, to] of list) {
+      const a = positions[from], b = positions[to];
+      const length = arcLength(a, b);
+      // 两端按节点半径内缩，线不会钻进水体或压住数字
+      const start = targets[from] * 1.2 / length, end = 1 - targets[to] * 1.2 / length;
+      if (end - start < 0.03) continue;
+      let previous = null;
+      for (let step = 0; step <= ARC_STEPS; step++) {
+        const t = start + (end - start) * step / ARC_STEPS;
+        arcPoint(a, b, t, arcScratch);
+        if (previous) {
+          position.setXYZ(vertex, previous.x, previous.y, previous.z);
+          along.setX(vertex++, previous.s);
+          position.setXYZ(vertex, arcScratch.x, arcScratch.y, arcScratch.z);
+          along.setX(vertex++, t * length);
+        }
+        previous = { x: arcScratch.x, y: arcScratch.y, z: arcScratch.z, s: t * length };
+      }
+    }
+    lines.geometry.setDrawRange(0, vertex);
+    position.needsUpdate = along.needsUpdate = true;
+  }
+  function updateEdges() {
+    const muted = [], active = [];
+    for (const edge of edges) (edge.includes(selected) ? active : muted).push(edge);
+    fillLines(mutedLines, muted);
+    fillLines(activeLines, active);
   }
 
+  // 黄铜刻度环：三道倾斜的环 + 每 5° 一格、每 30° 一长格的刻度
+  const brassRing = lineMaterial("#d8b87a", 0.28, 0);
+  const brassTicks = lineMaterial("#d8b87a", 0.4, 0);
+  const tickAxis = new THREE.Vector3(1, 0, 0);
+  for (const tilt of [0.23, 0.98, 1.82]) {
+    const outline = [], ticks = [];
+    const normal = new THREE.Vector3(0, 1, 0).applyAxisAngle(tickAxis, tilt);
+    for (let i = 0; i < 96; i++) {
+      const angle = i * Math.PI / 48;
+      outline.push(new THREE.Vector3(Math.cos(angle) * 1.23, 0, Math.sin(angle) * 1.23).applyAxisAngle(tickAxis, tilt));
+    }
+    for (let i = 0; i < 72; i++) {
+      const angle = i * Math.PI / 36;
+      const point = new THREE.Vector3(Math.cos(angle) * 1.23, 0, Math.sin(angle) * 1.23).applyAxisAngle(tickAxis, tilt);
+      const half = i % 6 === 0 ? 0.03 : 0.012;
+      ticks.push(point.clone().addScaledVector(normal, -half), point.clone().addScaledVector(normal, half));
+    }
+    const ringGeometry = new THREE.BufferGeometry().setFromPoints(outline);
+    ringGeometry.setAttribute("aS", new THREE.Float32BufferAttribute(new Float32Array(outline.length), 1));
+    const tickGeometry = new THREE.BufferGeometry().setFromPoints(ticks);
+    tickGeometry.setAttribute("aS", new THREE.Float32BufferAttribute(new Float32Array(ticks.length), 1));
+    scene.add(new THREE.LineLoop(ringGeometry, brassRing), new THREE.LineSegments(tickGeometry, brassTicks));
+  }
+
+  // 选中标记：始终朝向相机的双层刻度圈，外圈三段弧缓慢旋转
+  const reticle = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+    transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { ...shared, uColor: { value: new THREE.Color("#f0cf8b") } },
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uTime;
+      uniform float uReveal;
+      varying vec2 vUv;
+      void main() {
+        vec2 p = (vUv - 0.5) * 2.0;
+        float r = length(p);
+        float a = atan(p.y, p.x);
+        float w = fwidth(r) * 1.2;
+        float outer = smoothstep(0.035 + w, 0.0, abs(r - 0.86));
+        float arcs = step(0.0, sin(a * 3.0 + uTime * 0.6));
+        float inner = smoothstep(0.018 + w, 0.0, abs(r - 0.76)) * step(0.0, sin(a * 18.0 - uTime * 0.5)) * 0.55;
+        gl_FragColor = vec4(uColor, (outer * (0.3 + 0.7 * arcs) + inner) * 0.9 * uReveal);
+        #include <colorspace_fragment>
+      }`,
+  }));
+  reticle.renderOrder = 5;
+  scene.add(reticle);
+
+  /* ---------- 状态 ---------- */
   let selected = centerId;
   let yaw = -0.32, pitch = 0.34;
+  let goal = null;                 // 选中节点后相机缓动的目标朝向
   let width = 0, height = 0;
-  let frame = 0, stirredAt = -Infinity, impulse = 0;
-  let drag = null;
+  let frame = 0, lastNow = 0, introAt = null;
+  let stirredAt = -Infinity, impulse = 0;
+  let drag = null, hovering = false, visible = true, labelsDirty = true, introDone = false;
   const screen = new THREE.Vector3();
-  const edgeDirection = new THREE.Vector3();
-  const edgePoint = new THREE.Vector3();
-
-  function updateEdges() {
-    let baseCount = 0, activeCount = 0;
-    const base = mutedLines.geometry.attributes.position;
-    const active = activeLines.geometry.attributes.position;
-    for (const [a, b] of edges) {
-      const related = a === selected || b === selected;
-      const output = related ? active : base;
-      const i = related ? activeCount : baseCount;
-      edgeDirection.subVectors(positions[b], positions[a]).normalize();
-      edgePoint.copy(positions[a]).addScaledVector(edgeDirection, records[a].group.scale.x);
-      output.setXYZ(i, edgePoint.x, edgePoint.y, edgePoint.z);
-      edgePoint.copy(positions[b]).addScaledVector(edgeDirection, -records[b].group.scale.x);
-      output.setXYZ(i + 1, edgePoint.x, edgePoint.y, edgePoint.z);
-      if (related) activeCount += 2;
-      else baseCount += 2;
-    }
-    mutedLines.geometry.setDrawRange(0, baseCount);
-    activeLines.geometry.setDrawRange(0, activeCount);
-    base.needsUpdate = active.needsUpdate = true;
-  }
+  const animating = () => !reducedMotion.matches && visible && !document.hidden;
 
   function projectLabels() {
     const adjacent = new Set(edges.filter(edge => edge.includes(selected)).flat());
@@ -471,13 +822,14 @@
       if (Math.abs(screen.x) > 0.95 || Math.abs(screen.y) > 0.91) continue;
       pointer.set(screen.x, screen.y);
       raycaster.setFromCamera(pointer, camera);
+      // 被别的节点挡住的标签不显示
       if (raycaster.intersectObjects(pickTargets, false)[0]?.object !== record.glass) continue;
       const depth = -positions[id].clone().applyMatrix4(camera.matrixWorldInverse).z;
       const radius = record.group.scale.x * height / (2 * depth * Math.tan(camera.fov * rad / 2));
       const x = (screen.x + 1) * width / 2;
       const y = (1 - screen.y) * height / 2;
-      const half = displayName(id).length * 6 + 6;
-      const labelY = y + radius + 7;
+      const half = displayName(id).length * 6.5 + 6;
+      const labelY = y + radius + 8;
       if (x < half || x + half > width || labelY > height - 18 ||
         occupied.some(box => Math.abs(box.x - x) < box.half + half && Math.abs(box.y - labelY) < 17)) continue;
       occupied.push({ x, y: labelY, half });
@@ -489,62 +841,156 @@
     }
   }
 
-  function render(now = performance.now()) {
+  function render(now) {
     if (!width || !height) return;
+    const dt = lastNow ? Math.min((now - lastNow) / 1000, 0.05) : 0;
+    lastNow = now;
+    const still = reducedMotion.matches;
+    if (introAt === null) introAt = now;
+    const intro = still ? Infinity : (now - introAt) / 1000;
+
+    // 相机：选中节点后缓动转向；空闲时极慢地自转，拖动或悬停时停住
+    let moving = !introDone || !!drag;
+    if (goal) {
+      const k = 1 - Math.exp(-dt * 5.5);
+      yaw += wrapAngle(goal.yaw - yaw) * k;
+      pitch += (goal.pitch - pitch) * k;
+      if (Math.abs(wrapAngle(goal.yaw - yaw)) < 0.002 && Math.abs(goal.pitch - pitch) < 0.002) goal = null;
+      moving = true;
+    } else if (!drag && !hovering && !still) {
+      yaw += dt * 0.035;
+      moving = true;
+    }
     const v = camera.fov * rad / 2;
     const fit = Math.min(v, Math.atan(Math.tan(v) * camera.aspect));
-    const distance = 1.45 / Math.sin(fit);
+    const distance = 1.5 / Math.sin(fit);
     camera.position.set(
       distance * Math.cos(pitch) * Math.sin(yaw),
       distance * Math.sin(pitch),
       distance * Math.cos(pitch) * Math.cos(yaw),
     );
     camera.lookAt(0, 0, 0);
+
+    // 入场：节点按序号依次弹出，之后连线与标签再淡入
+    for (let i = 0; i < records.length; i++) {
+      const k = still ? 1 : easeOutBack(THREE.MathUtils.clamp((intro - i * 0.03) / 0.8, 0, 1));
+      records[i].group.scale.setScalar(Math.max(1e-4, targets[i] * k));
+    }
+    shared.uReveal.value = still ? 1 : smooth(0.7, 1.7, intro);
+    if (!introDone) {
+      labels.style.opacity = still ? 1 : smooth(1.1, 1.8, intro);
+      if (intro > 2.2) introDone = true;
+    }
+    shared.uTime.value = now / 1000;
+    shared.uCamDist.value = distance;
+    // 圆片半径取球体轮廓在球心平面上的投影半径，使亮环正好贴住透视后的球缘
+    atmosphere.scale.setScalar(ATMOSPHERE_RADIUS / Math.sqrt(1 - (ATMOSPHERE_RADIUS / distance) ** 2));
+    atmosphere.quaternion.copy(camera.quaternion);
+    activeLines.material.uniforms.uFlow.value = still ? 0 : 1;
+
     const elapsed = Math.min(now - stirredAt, 1500);
-    const energy = reducedMotion.matches ? 0 : Math.max(0, 1 - elapsed / 1500);
+    const decay = Math.max(0, 1 - elapsed / 1500);
+    // 水面一直有极轻微的起伏，拖动或点选时才会明显晃动
+    const energy = still ? 0 : 0.16 + 0.84 * decay;
     for (const { group, halo, uniforms } of records) {
       if (uniforms) {
-        uniforms.phase.value = elapsed / 125;
+        uniforms.phase.value = now / 260;
         uniforms.energy.value = energy;
-        uniforms.tilt.value = impulse * energy * Math.cos(elapsed / 134);
+        uniforms.tilt.value = impulse * decay * Math.cos(elapsed / 134);
       }
       if (halo) {
-        // Let the water occlude the center of the glow while the mist extends outward.
+        // 让水体遮住光晕中心，雾气向外延展
         halo.position.subVectors(group.position, camera.position).normalize().multiplyScalar(0.64);
         halo.quaternion.copy(camera.quaternion);
       }
     }
+    reticle.position.copy(positions[selected]);
+    reticle.scale.setScalar(Math.max(1e-4, records[selected].group.scale.x * 1.75));
+    reticle.quaternion.copy(camera.quaternion);
+
     renderer.render(scene, camera);
-    projectLabels();
+    if (moving || labelsDirty) {
+      projectLabels();
+      labelsDirty = false;
+    }
   }
-  function animate(now) {
+  function tick(now) {
     frame = 0;
     render(now);
-    if (!reducedMotion.matches && now - stirredAt < 1500) frame = requestAnimationFrame(animate);
+    if (animating()) frame = requestAnimationFrame(tick);
   }
+  const wake = () => { if (!frame) frame = requestAnimationFrame(tick); };
   function stir(tilt) {
     stirredAt = performance.now();
     impulse = THREE.MathUtils.clamp(tilt, -0.35, 0.35);
-    if (!frame) frame = requestAnimationFrame(animate);
+    wake();
   }
+
+  /* ---------- 详情面板 ---------- */
+  function chip(id) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ks-chip";
+    button.dataset.state = stateOf(id);
+    button.textContent = displayName(id);
+    if (isLocked(id)) button.disabled = true;
+    else button.addEventListener("click", () => { select(id, true); stir(0.28); });
+    return button;
+  }
+  function fillRow(row, ids) {
+    row.hidden = ids.length === 0;
+    row.querySelector("dd").replaceChildren(...ids.map(chip));
+  }
+  function updatePanel(id) {
+    const state = stateOf(id);
+    const locked = isLocked(id);
+    panel.dataset.state = state;
+    nodeName.textContent = displayName(id);
+    stateTag.textContent = STATE_LABEL[state];
+    stateTag.dataset.state = state;
+    ringEl.hidden = locked;
+    ringEl.style.setProperty("--p", concepts[id][4]);
+    ringValue.textContent = concepts[id][4];
+    // 未解锁节点不暴露它的邻居，和标签的「???」规则保持一致
+    fillRow(rowIn, locked ? [] : concepts[id][3]);
+    fillRow(rowOut, locked ? [] : edges.filter(([from]) => from === id).map(([, to]) => to));
+    if (!reducedMotion.matches) {
+      panel.animate([{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }],
+        { duration: 260, easing: "cubic-bezier(.2,.7,.2,1)" });
+    }
+  }
+
   function select(id, orient = false) {
     selected = id;
     if (orient) {
-      // Keep the selected shell node offset so that it does not cover the origin.
-      yaw = id === centerId ? -0.32 : concepts[id][2] * rad - 0.55;
-      pitch = id === centerId ? 0.34 : concepts[id][1] * rad + 0.26;
+      // 让选中的壳层节点偏离正中，避免遮住球心
+      const next = {
+        yaw: id === centerId ? -0.32 : concepts[id][2] * rad - 0.55,
+        pitch: id === centerId ? 0.34 : concepts[id][1] * rad + 0.26,
+      };
+      if (reducedMotion.matches) ({ yaw, pitch } = next);
+      else goal = next;
     }
     for (let i = 0; i < records.length; i++) {
-      const radius = i === centerId ? (i === id ? 0.25 : 0.21)
-        : i === id ? 0.16 : concepts[i][4] > 0 ? 0.09 : 0.058;
-      records[i].group.scale.setScalar(radius);
+      targets[i] = i === centerId ? (i === id ? 0.26 : 0.22)
+        : i === id ? 0.17 : concepts[i][4] > 0 ? 0.1 : 0.062;
       records[i].marker.dataset.selected = String(i === id);
     }
     picker.value = String(id);
     progressLabel.textContent = `${displayName(id)}，学习进度 ${concepts[id][4]}%${concepts[id][5] ? "，已掌握" : ""}`;
+    updatePanel(id);
     updateEdges();
+    labelsDirty = true;
+    wake();
   }
 
+  /* ---------- 交互 ---------- */
+  function pick(event) {
+    const bounds = canvas.getBoundingClientRect();
+    pointer.set(2 * (event.clientX - bounds.left) / bounds.width - 1, 1 - 2 * (event.clientY - bounds.top) / bounds.height);
+    raycaster.setFromCamera(pointer, camera);
+    return raycaster.intersectObjects(pickTargets, false)[0];
+  }
   picker.replaceChildren(...concepts.map((_, id) => new Option(
     displayName(id) === "???" ? `未解锁节点 ${id + 1}` : displayName(id), id,
   )));
@@ -555,12 +1001,20 @@
   canvas.addEventListener("pointerdown", event => {
     if (!event.isPrimary || event.button !== 0) return;
     drag = { x: event.clientX, y: event.clientY, lastX: event.clientX, yaw, pitch };
+    goal = null;
+    canvas.style.cursor = "";
     canvas.setPointerCapture(event.pointerId);
   });
   canvas.addEventListener("pointermove", event => {
-    if (!drag || !event.isPrimary) return;
+    if (!event.isPrimary) return;
+    if (!drag) {
+      // 悬停在节点上时提示可点选
+      canvas.style.cursor = pick(event) ? "pointer" : "";
+      return;
+    }
     yaw = drag.yaw - (event.clientX - drag.x) * 0.009;
     pitch = THREE.MathUtils.clamp(drag.pitch + (event.clientY - drag.y) * 0.008, -1.43, 1.43);
+    labelsDirty = true;
     stir((event.clientX - drag.lastX) * 0.03);
     drag.lastX = event.clientX;
   });
@@ -569,15 +1023,14 @@
     const distance = Math.hypot(event.clientX - drag.x, event.clientY - drag.y);
     drag = null;
     if (distance > 5) return;
-    const bounds = canvas.getBoundingClientRect();
-    pointer.set(2 * (event.clientX - bounds.left) / bounds.width - 1, 1 - 2 * (event.clientY - bounds.top) / bounds.height);
-    raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects(pickTargets, false)[0];
+    const hit = pick(event);
     if (!hit) return;
     select(hit.object.userData.id);
     stir(0.18);
   });
   canvas.addEventListener("lostpointercapture", () => { drag = null; });
+  canvas.addEventListener("pointerenter", () => { hovering = true; });
+  canvas.addEventListener("pointerleave", () => { hovering = false; wake(); });
   function resize() {
     width = stage.clientWidth;
     height = stage.clientHeight;
@@ -586,8 +1039,14 @@
     renderer.setSize(width, height, false);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    render();
+    labelsDirty = true;
+    wake();
   }
+  // 滚出视口或切到后台时停止逐帧渲染，回来后再恢复
+  new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; if (visible) wake(); }).observe(stage);
+  document.addEventListener("visibilitychange", wake);
+  reducedMotion.addEventListener("change", () => { labelsDirty = true; wake(); });
+
   select(centerId);
   new ResizeObserver(resize).observe(stage);
   resize();
