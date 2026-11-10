@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>知识星空图 · 学习助手</title>
+  {# three.js 随应用本地提供，页面运行时不请求站外资源；addons 内部用裸模块名 three 互相引用，需靠 importmap 解析。 #}
+  <script type="importmap">
+  {"imports":{"three":"{{ url_for('static', filename='vendor/three/three.module.min.js') }}","three/addons/":"{{ url_for('static', filename='vendor/three/addons/') }}"}}
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='sky.css') }}">
+</head>
+<body class="sky-page">
+  <header class="sky-bar">
+    <a class="sky-brand" href="{{ url_for('index') }}">学习助手</a>
+    <nav aria-label="学习导航">
+      <a href="{{ url_for('index') }}">工作台</a>
+    </nav>
+  </header>
+  <main class="sky-main">
+    <section id="knowledge-sky" aria-labelledby="ks-title">
+      <div class="ks-sky">
+        <canvas tabindex="0" aria-label="可拖动旋转的三维知识星空图，方向键切换节点"></canvas>
+        <div class="ks-labels"></div>
+        <header class="ks-header">
+          <h2 id="ks-title">知识体系星空图</h2>
+        </header>
+        <div class="ks-picker">
+          <label for="ks-course">切换课程</label>
+          <select id="ks-course"></select>
+        </div>
+        <div class="ks-legend" role="img" aria-label="节点状态：未解锁、待学习、学习中、已学完、已掌握">
+          <i class="ks-glyph" data-state="locked" title="未解锁"></i>
+          <i class="ks-glyph" data-state="ready" title="待学习"></i>
+          <i class="ks-glyph" data-state="learning" title="学习中"></i>
+          <i class="ks-glyph" data-state="done" title="已学完"></i>
+          <i class="ks-glyph" data-state="mastered" title="已掌握"></i>
+        </div>
+        <span class="ks-progress" aria-live="polite"></span>
+        <div class="ks-error" role="status" hidden></div>
+      </div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='sky.js') }}"></script>
+</body>
+</html>

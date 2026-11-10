@@ -2631,8 +2631,6 @@ $("course-form").addEventListener("submit", async (event) => {
   } finally { button.disabled = false; }
 });
 $("btn-courses").addEventListener("click", () => { librarySearch.value = ""; renderLibrary(); });
-$("btn-knowledge-sky").addEventListener("click", () => $("knowledge-dialog").showModal());
-$("btn-knowledge-close").addEventListener("click", () => $("knowledge-dialog").close());
 $("btn-sidebar-fold").addEventListener("click", () => {
   if (isLibraryDrawer()) setLeftRail(false); else document.body.classList.add("library-closed");
 });

@@ -147,13 +147,12 @@ class CourseWorkspaceTests(unittest.TestCase):
         self.assertEqual(self.context.request.get(f"{self.server.url}/api/chat?doc_id={self.doc_id}&thread_id={new_thread}").json()["messages"], [])
         self.assertEqual(len(self.context.request.get(f"{self.server.url}/api/chat?doc_id={self.doc_id}&thread_id={old_thread}").json()["messages"]), 2)
 
-    def test_mobile_drawers_and_knowledge_placeholder(self):
+    def test_mobile_drawers_and_knowledge_link(self):
         self.create_and_import()
         self.page.set_viewport_size({"width": 390, "height": 844})
         self.page.locator("#btn-rail-toggle").click()
-        self.page.locator("#btn-knowledge-sky").click()
-        expect(self.page.locator("#knowledge-dialog")).to_contain_text("后续开放")
-        self.page.locator("#btn-knowledge-close").click()
+        # 知识星空图是独立主页面的入口；进入页面的完整流程见 test_knowledge_sky.py。
+        expect(self.page.locator("#btn-knowledge-sky")).to_have_attribute("href", "/sky")
         self.page.locator("#btn-sidebar-fold").click()
         expect(self.page.locator("#pane-notes")).to_be_visible()
         self.page.locator("#btn-source-toggle").click()
