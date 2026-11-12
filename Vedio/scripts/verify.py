@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
-MOVIE = ROOT / 'output' / 'study-film-2min.mp4'
+MOVIE = ROOT / 'output' / 'study-film-cinematic.mp4'
 
 
 def main():
@@ -20,8 +20,9 @@ def main():
     assert audio.codec_context.name == 'aac'
     duration = container.duration / av.time_base
     assert 119.9 <= duration <= 120.1, duration
-    seconds = [3,8,12,16,20,24,29,38,47,52,57,63,68,72,75,80,85,90,94,98,102,106,110,113,118]
-    chosen = {second*30: i for i,second in enumerate(seconds)}
+    sample_frames = [90,255,310,370,454,535,623,730,879,943,1160,1510,1840,
+                     2080,2220,2370,2520,2720,2820,2940,3060,3180,3300,3390,3540]
+    chosen = {frame: i for i,frame in enumerate(sample_frames)}
     sheet = Image.new('RGB', (2400, 1500), '#D6E1D9')
     draw = ImageDraw.Draw(sheet)
     frame_count = 0
@@ -64,7 +65,8 @@ def main():
               'decoded_video_frames':frame_count,'video_codec':'h264','audio_codec':'aac',
               'audio_sample_rate':audio.rate,'decoded_audio_samples':audio_samples,
               'audio_peak':round(audio_peak,4),'file_bytes':MOVIE.stat().st_size,
-              'browser_capture_errors':capture['browser_errors'], 'sampled_seconds':seconds,
+              'browser_capture_errors':capture['browser_errors'],
+              'sampled_seconds':[round(frame/30,2) for frame in sample_frames],
               'visual_review':'Sampled contact sheet generated for manual inspection; not a real user test.'}
     (ROOT/'output/verification.json').write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(report,ensure_ascii=False,indent=2))

@@ -1,6 +1,6 @@
 # 两分钟学习工作台宣传片
 
-成片：[`output/study-film-2min.mp4`](output/study-film-2min.mp4)。
+角色开场版成片见 [`output/study-film-cinematic.mp4`](output/study-film-cinematic.mp4)。
 
 星空片段预览：`output/knowledge-preview.mp4`（原片 1:27–1:44，含配音与字幕）。通过 `python scripts/extract_knowledge.py` 从完成的成片提取。
 
@@ -8,7 +8,7 @@
 
 ## 内容
 
-先呈现大学生课程学习和考前复习的五个困难：课件格式多、工具分散、概念难懂、长文阅读困难、复习时间紧。随后展示原页面浏览、AI 讲解、划段提问和笔记，再展示知识星空及函数、绘图、编程工具的概念效果。
+前 32 秒以风格化三维角色演出夜间复习。学生从背面抱头，到右侧切换工具，再由同一条运镜掠过人物背后，抵达左侧观看加速翻阅的长文。随后学生起身面对散落的知识点，镜头绕回背面，时钟与滴答声加速。第 32 秒进入原页面演示。
 
 完整时间线与演示边界见 [`PLAN.md`](PLAN.md)。
 

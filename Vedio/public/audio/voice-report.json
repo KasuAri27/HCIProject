@@ -1,38 +1,38 @@
 [
   {
     "cue": 0,
-    "original_seconds": 4.608,
-    "used_seconds": 4.608
+    "original_seconds": 2.712,
+    "used_seconds": 2.7
   },
   {
     "cue": 1,
-    "original_seconds": 3.432,
-    "used_seconds": 3.432
+    "original_seconds": 3.888,
+    "used_seconds": 3.6
   },
   {
     "cue": 2,
-    "original_seconds": 3.648,
-    "used_seconds": 3.6
+    "original_seconds": 5.592,
+    "used_seconds": 5.4
   },
   {
     "cue": 3,
-    "original_seconds": 3.576,
-    "used_seconds": 3.576
+    "original_seconds": 7.248,
+    "used_seconds": 6.7
   },
   {
     "cue": 4,
-    "original_seconds": 3.864,
-    "used_seconds": 3.6
+    "original_seconds": 4.632,
+    "used_seconds": 4.632
   },
   {
     "cue": 5,
-    "original_seconds": 3.96,
-    "used_seconds": 3.6
+    "original_seconds": 2.832,
+    "used_seconds": 2.7
   },
   {
     "cue": 6,
-    "original_seconds": 4.248,
-    "used_seconds": 4.248
+    "original_seconds": 2.592,
+    "used_seconds": 1.9
   },
   {
     "cue": 7,
