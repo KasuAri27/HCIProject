@@ -2,6 +2,8 @@ export type Edge = readonly [number, number];
 export type KnowledgeNode = {
   id: number; name: string; position: readonly [number, number, number];
   radius: number; masteredAt: number; learnFrom?: number;
+  /** Rank outward from the centre of the sky; 0 is the middle. */
+  order: number;
 };
 export type Disclosure = {state: 'lit' | 'frontier' | 'locked'; title: string};
 
@@ -15,16 +17,36 @@ const topics = [
   '梯度','偏导数','多重积分','曲线积分','优化方法',
 ];
 
-// Fibonacci placement covers a 3D shell. A wider horizontal scale fits the
-// video frame while retaining real Z depth and perspective parallax.
+// Each topic takes one slot of a golden-angle spiral on a dome facing the
+// camera: slot 0 sits in the middle and higher slots move outward and back.
+// "导数" (id 8) is the hero and takes the centre, the other known topics ring
+// it, and the two topics learned on screen (9, 10) sit just outside with their
+// follow-ups (11, 12) further out on the same spokes. What is known therefore
+// reads as a bright core and the unknown as the dark rim around it.
+const slotOf = (id: number) => {
+  if(id===8)return 0;
+  if(id<8)return id+1;
+  const fixed: Record<number, number> = {9:9, 10:10, 11:22, 12:23};
+  if(id in fixed)return fixed[id];
+  const free = Array.from({length: topics.length}, (_, slot) => slot).filter(slot => slot>10 && slot!==22 && slot!==23);
+  return free[id-13];
+};
+// Deterministic 0..1 jitter so the dome is not a perfect shell.
+const jitter = (n: number) => { const v = Math.sin(n*127.1+311.7)*43758.5453; return v-Math.floor(v); };
+
 export const knowledgeNodes: KnowledgeNode[] = topics.map((name, id) => {
-  const y = 1 - 2 * (id + 0.5) / topics.length;
-  const ring = Math.sqrt(1 - y*y);
-  const angle = id * Math.PI * (3 - Math.sqrt(5));
+  const slot = slotOf(id);
+  // cos runs from 1 (facing the camera) to about -0.5 (curving away behind).
+  const cos = 1 - 1.5 * (slot + 0.5) / topics.length;
+  const ring = Math.sqrt(1 - cos*cos);
+  const angle = slot * Math.PI * (3 - Math.sqrt(5)) + 0.6;
+  const reach = 4.5 * (0.88 + 0.2*jitter(slot));
   return {
-    id, name, position: [Math.cos(angle)*ring*6.9, y*3.15, Math.sin(angle)*ring*3.4],
+    // Wider than tall to fill a 16:9 frame; depth is kept for real parallax.
+    id, name, position: [Math.cos(angle)*ring*reach*1.62, Math.sin(angle)*ring*reach*0.84, cos*reach*0.9 - 1.2],
     radius: id===8 ? 0.43 : id===9 ? 0.38 : id===10 ? 0.34 : 0.19 + (id%4)*0.035,
     masteredAt: id<9 ? 0 : id===9 ? 230 : id===10 ? 378 : Infinity,
+    order: slot,
     ...(id===9 ? {learnFrom:85} : id===10 ? {learnFrom:255} : {}),
   };
 });

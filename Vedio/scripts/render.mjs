@@ -12,6 +12,8 @@ const {openBrowser,selectComposition,renderStill,renderMedia}=cliRequire('@remot
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 process.chdir(root);
 const output=path.join(root,'output');
+// Stills can go elsewhere (VIDEO_PREVIEW_DIR) so work-in-progress frames do not land in output/.
+const stills=process.env.VIDEO_PREVIEW_DIR || output;
 fs.mkdirSync(output,{recursive:true});
 const browserExecutable=process.env.VIDEO_BROWSER || 'D:/Dev/tool/hci-ci/browsers/chromium-1248/chrome-win64/chrome.exe';
 const serveUrl=await bundle({entryPoint:path.join(root,'src/index.ts'),outDir:path.join(output,'render-bundle'),publicDir:path.join(root,'public'),onProgress:p=>{if(p===100)console.log('Bundle ready');}});
@@ -22,14 +24,14 @@ try{
   if(process.argv[2]==='preview'){
     const frames=(process.argv.slice(3).length?process.argv.slice(3).map(Number):[90,255,310,370,454,535,623,730,879,943,1160,1510,1840,2220,2520,2720,3000,3180,3300,3400,3540]);
     for(const frame of frames){
-      await renderStill({...common,composition,frame,imageFormat:'png',output:path.join(output,`frame-${String(frame).padStart(4,'0')}.png`)});
+      await renderStill({...common,composition,frame,imageFormat:'png',output:path.join(stills,`frame-${String(frame).padStart(4,'0')}.png`)});
       console.log(`Preview ${frame} / ${(frame/30).toFixed(1)}s`);
     }
   }else{
     let last=-1;
-    await renderMedia({...common,composition,codec:'h264',audioCodec:'aac',crf:18,pixelFormat:'yuv420p',concurrency:3,outputLocation:path.join(output,'study-film-cinematic.mp4'),onProgress:p=>{
+    await renderMedia({...common,composition,codec:'h264',audioCodec:'aac',crf:18,pixelFormat:'yuv420p',concurrency:3,outputLocation:path.join(output,'study-film-v3.mp4'),onProgress:p=>{
       const step=Math.floor(p.progress*20);if(step!==last){last=step;console.log(`Rendering ${step*5}% (${p.renderedFrames}/3600 frames)`);}
     }});
-    console.log('Completed output/study-film-cinematic.mp4');
+    console.log('Completed output/study-film-v3.mp4');
   }
 }finally{await browser.close({silent:true});}

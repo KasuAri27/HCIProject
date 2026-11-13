@@ -1,28 +1,107 @@
 import React from 'react';
 import {useCurrentFrame} from 'remotion';
-import {Backdrop,Badge,Heading} from './Shared';
 import {C,ease,linear,mono} from './motion';
 
-const tabs=['函数工具','绘图工具','编程工具'];
+// Concept demo of the three study tools (film frames 3120-3450). All three are
+// on screen together and stay alive; the narration only moves the emphasis:
+//   12-118  "函数、绘图与编程" - each panel is named in turn
+//  137-205  "调一个参数，看曲线变化" - function panel, slider drives the curve
+//  212-242  "画出结构" - geometry panel constructs the circumcircle
+//  245-278  "运行代码" - code panel runs and prints the result
+//  280-330  "让抽象知识变得具体" - all three together
 const code=['def derivative(f, x, h=1e-5):','    return (f(x+h) - f(x-h)) / (2*h)','','f = lambda x: x**2','print(derivative(f, 2))'];
+const PANELS=[
+  {name:'函数工具',title:'观察函数的变化',hint:'改变参数，看见曲线怎样响应。'},
+  {name:'绘图工具',title:'画出几何关系',hint:'从已知条件出发，作图、验证。'},
+  {name:'编程工具',title:'让代码验证想法',hint:'输入一个例子，观察运行结果。'},
+];
+const span=(f:number,from:number,to:number,fade=9)=>linear(f,from,from+fade)*linear(f,to-fade,to,1,0);
 
 export const Tools:React.FC=()=>{
-  const f=useCurrentFrame();const tab=f<120?0:f<225?1:2;const t=tab===0?f:tab===1?f-120:f-225;
-  const amplitude=0.65+ease(t,10,112)*1.1;
-  const points=Array.from({length:181},(_,i)=>{const x=-Math.PI*2+i/180*Math.PI*4;return `${i===0?'M':'L'}${118+i/180*1040},${350-Math.sin(x)*amplitude*130}`;}).join(' ');
-  return <><Backdrop light/><Heading title="把抽象知识，变成看得见的实践。" detail="函数、绘图与编程，在学习现场继续探索。" light/><Badge>学习工具 · 概念演示</Badge>
-    <div style={{position:'absolute',left:90,top:185,width:1740,height:780,border:'1px solid #CCDCD0',borderRadius:13,background:'#FFF',overflow:'hidden',boxShadow:'0 25px 60px #153A2C1A'}}>
-      <div style={{height:75,display:'flex',alignItems:'center',gap:20,padding:'0 29px',borderBottom:'1px solid #DCE6DF',background:'#F6F9F5'}}><span style={{fontSize:24,color:C.ink,fontWeight:600,marginRight:38}}>学习工具</span>{tabs.map((s,i)=><div key={s} style={{fontSize:21,color:i===tab?'white':'#6E8477',background:i===tab?C.teal:'transparent',padding:'10px 24px',borderRadius:7}}>{s}</div>)}</div>
-      <div style={{position:'absolute',left:0,top:75,bottom:0,width:355,borderRight:'1px solid #DCE6DF',padding:'37px 30px',color:C.ink}}>
-        <div style={{fontSize:31,fontWeight:600,marginBottom:24}}>{['观察函数的变化','画出几何关系','让代码验证想法'][tab]}</div>
-        <div style={{fontSize:20,lineHeight:1.9,color:'#6B8175'}}>{['改变参数，看见曲线怎样响应。','从一个点开始，连接、作图、验证。','输入一个例子，观察运行结果。'][tab]}</div>
-        {tab===0?<><div style={{fontSize:30,fontFamily:mono,marginTop:55}}>y = a · sin(x)</div><div style={{marginTop:42,fontSize:22}}>a = {amplitude.toFixed(2)}</div><div style={{position:'relative',width:275,height:5,background:'#D5E5DA',marginTop:27,borderRadius:4}}><div style={{width:`${(amplitude-.4)/1.5*100}%`,height:5,background:C.teal}}/><div style={{position:'absolute',left:(amplitude-.4)/1.5*270,top:-8,width:21,height:21,borderRadius:'50%',background:C.teal,border:'3px solid white',boxShadow:'0 0 0 1px #9DBAA8'}}/></div><div style={{fontSize:17,color:'#82988B',marginTop:30}}>参数动画示例</div></>:tab===1?<><div style={{display:'flex',gap:13,marginTop:45}}>{['线段','圆形','标注'].map((s,i)=><div key={s} style={{border:`1px solid ${i===0?C.teal:'#CFDDD3'}`,padding:'11px 15px',fontSize:19,borderRadius:7}}>{s}</div>)}</div><div style={{marginTop:45,fontSize:23}}>三角形与外接圆</div><div style={{fontSize:18,color:'#7C9184',marginTop:20}}>连接已知条件，探索结构。</div></>:<><div style={{fontSize:22,marginTop:46}}>Python / 导数近似</div><div style={{border:'1px solid #CEDDD0',borderRadius:8,padding:20,marginTop:25,fontSize:20,lineHeight:1.8,color:'#658571'}}>对 f(x)=x²<br/>计算 x=2 处的导数。</div><div style={{marginTop:32,background:C.teal,color:'white',display:'inline-block',padding:'12px 29px',borderRadius:7,fontSize:21}}>▷ 运行示例</div></>}
-      </div>
-      <div style={{position:'absolute',left:355,top:75,width:1385,height:705}}>
-        {tab===0&&<svg width="1385" height="705"><defs><pattern id="grid" width="65" height="65" patternUnits="userSpaceOnUse"><path d="M65 0H0V65" fill="none" stroke="#E5ECE6" strokeWidth="1"/></pattern></defs><rect width="1385" height="705" fill="url(#grid)"/><path d="M80 350H1280M640 60V650" stroke="#9AB0A0" strokeWidth="2"/><path d={points} fill="none" stroke={C.teal} strokeWidth="5" strokeLinecap="round"/><circle cx={118+(t%120)/120*1040} cy={350-Math.sin(-Math.PI*2+(t%120)/120*Math.PI*4)*amplitude*130} r="9" fill={C.gold} stroke={C.teal} strokeWidth="3"/><text x="1200" y="390" fill="#6B8175" fontSize="24">x</text><text x="666" y="95" fill="#6B8175" fontSize="24">y</text><text x="91" y="80" fill={C.teal} fontSize="28">y = {amplitude.toFixed(2)} sin(x)</text></svg>}
-        {tab===1&&<svg width="1385" height="705"><defs><pattern id="dots" width="30" height="30" patternUnits="userSpaceOnUse"><circle cx="15" cy="15" r="1" fill="#D5E2D7"/></pattern></defs><rect width="1385" height="705" fill="url(#dots)"/><circle cx="685" cy="350" r="250" fill="#EDF6EF" stroke="#9DC4AF" strokeWidth="2" strokeDasharray="7 8" opacity={linear(t,30,60)}/><path d="M685 100 468.5 475 901.5 475Z" fill="none" stroke={C.teal} strokeWidth="5" pathLength="1" strokeDasharray="1" strokeDashoffset={1-ease(t,0,67)}/>{[[685,100,'A'],[468.5,475,'B'],[901.5,475,'C']].map(([x,y,s])=><g key={s}><circle cx={x} cy={y} r="8" fill={C.teal}/><text x={Number(x)+17} y={Number(y)-15} fontSize="28" fill={C.ink}>{s}</text></g>)}<path d="M685 100V475" stroke="#A7BFB1" strokeWidth="2" strokeDasharray="5 7" opacity={linear(t,50,75)}/><circle cx="685" cy="350" r="6" fill={C.gold}/><text x="730" y="600" fontSize="23" fill="#6B8175" opacity={linear(t,65,85)}>从图形，理解关系。</text></svg>}
-        {tab===2&&<div style={{height:'100%',background:'#112D32',padding:'40px 45px',fontFamily:mono}}><div style={{fontSize:17,color:'#92B5A5',marginBottom:35}}>derivative.py</div>{code.map((line,i)=><div key={i} style={{fontSize:28,lineHeight:1.9,whiteSpace:'pre',color:i===0?'#A9DCD1':i===4?'#E5C889':'#DEEEE1',opacity:linear(t,i*5,i*5+8)}}><span style={{display:'inline-block',width:60,color:'#5B8275',fontSize:22}}>{i+1}</span>{line}</div>)}<div style={{borderTop:'1px solid #52796C66',marginTop:30,paddingTop:24,opacity:linear(t,45,62)}}><div style={{fontSize:17,color:'#8DB5A3',marginBottom:14}}>示例运行结果</div><div style={{fontSize:30,color:'#B5EAC9'}}>4.000000000026205</div><div style={{fontSize:19,color:'#7EB29C',marginTop:21}}>✓ 运行完成</div></div></div>}
-      </div>
+  const f=useCurrentFrame();
+  // How strongly each panel is singled out at this frame, 0..1.
+  const focus=[
+    Math.max(span(f,38,58),span(f,134,208)),
+    Math.max(span(f,54,74),span(f,208,244)),
+    Math.max(span(f,70,92),span(f,242,282)),
+  ];
+  const any=Math.max(...focus);
+  const amplitude=0.6+ease(f,140,200)*1.2;
+  const curve=Array.from({length:121},(_,i)=>{const x=-Math.PI*2+i/120*Math.PI*4;return `${i?'L':'M'}${20+i/120*460},${186-Math.sin(x)*amplitude*80}`;}).join(' ');
+  const dotT=(f%150)/150,dotX=-Math.PI*2+dotT*Math.PI*4;
+  // Circumcircle construction: perpendicular bisectors meet at O, then the circle is drawn.
+  const O=[250,236],RADIUS=160,A=[250,76],B=[111.4,316],Cc=[388.6,316];
+  const mids=[[A,B],[B,Cc],[Cc,A]].map(([p,q])=>[(p[0]+q[0])/2,(p[1]+q[1])/2]);
+  const built=linear(f,212,236),ring=ease(f,226,258),ran=linear(f,254,264);
+
+  return <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse at 30% 0%,#F7FAF8 0%,#EAF0EC 55%,#DFE8E3 100%)',color:C.ink}}>
+    <div style={{position:'absolute',left:120,top:44,opacity:linear(f,6,26),transform:`translateY(${(1-linear(f,6,26))*14}px)`}}>
+      <div style={{fontSize:46,fontWeight:700}}>把抽象知识，变成看得见的实践。</div>
+      <div style={{fontSize:21,color:'#5E7A70',marginTop:12}}>函数、绘图与编程，在学习现场继续探索。</div>
     </div>
-  </>;
+    <div style={{position:'absolute',right:120,top:66,color:'#6F8780',fontSize:18,border:'1px solid #8AA69A66',borderRadius:7,padding:'7px 14px',opacity:linear(f,10,30)}}>学习工具 · 概念演示</div>
+
+    {PANELS.map((panel,i)=>{
+      const on=focus[i],enter=ease(f,6+i*7,34+i*7);
+      // Panels that are not being talked about step back slightly.
+      const dim=any*(1-on);
+      return <div key={panel.name} style={{position:'absolute',left:120+i*570,top:186,width:540,height:772,borderRadius:16,background:'#fff',overflow:'hidden',
+        opacity:enter*(1-dim*.42),transform:`translateY(${(1-enter)*60-on*8}px) scale(${1+on*.028-dim*.012})`,
+        boxShadow:`0 0 0 ${1+on*1.5}px ${on>.5?C.teal:'#CFDDD5'},0 ${26+on*22}px ${60+on*40}px -18px rgba(23,63,53,${.2+on*.16})`}}>
+        <div style={{height:66,display:'flex',alignItems:'center',gap:12,padding:'0 26px',borderBottom:'1px solid #DCE6DF',background:'#F6F9F5'}}>
+          <span style={{width:11,height:11,borderRadius:'50%',background:[C.teal,'#7A5BB5','#3D6FBF'][i]}}/>
+          <span style={{fontSize:23,fontWeight:700}}>{panel.name}</span>
+          <span style={{marginLeft:'auto',fontSize:15,color:'#8AA097'}}>概念演示</span>
+        </div>
+        <div style={{position:'absolute',left:20,top:86,width:500,height:476,borderRadius:10,overflow:'hidden',background:i===2?'#101C33':'#FBFCFB',border:i===2?'none':'1px solid #E3EBE6'}}>
+          {i===0&&<svg width="500" height="476">
+            <defs><pattern id="tool-grid" width="46" height="46" patternUnits="userSpaceOnUse"><path d="M46 0H0V46" fill="none" stroke="#E7EEE9" strokeWidth="1"/></pattern></defs>
+            <rect width="500" height="476" fill="url(#tool-grid)"/>
+            <path d="M14 186H486M250 24V348" stroke="#A9BCB2" strokeWidth="1.5"/>
+            <path d={curve} fill="none" stroke={C.teal} strokeWidth="4.5" strokeLinecap="round"/>
+            <circle cx={20+dotT*460} cy={186-Math.sin(dotX)*amplitude*80} r="8" fill={C.gold} stroke={C.teal} strokeWidth="3"/>
+            <text x="22" y="388" fill={C.teal} fontSize="25" fontFamily={mono}>y = {amplitude.toFixed(2)} · sin(x)</text>
+            {/* parameter slider: the knob position is the same value that shapes the curve */}
+            <text x="22" y="440" fill="#5E7A70" fontSize="20">a</text>
+            <rect x="52" y="430" width="330" height="6" rx="3" fill="#D5E5DA"/>
+            <rect x="52" y="430" width={(amplitude-.4)/1.6*330} height="6" rx="3" fill={C.teal}/>
+            <circle cx={52+(amplitude-.4)/1.6*330} cy="433" r={11+focus[0]*3} fill={C.teal} stroke="#fff" strokeWidth="3.5"/>
+            <text x="404" y="441" fill={C.ink} fontSize="22" fontFamily={mono}>{amplitude.toFixed(2)}</text>
+          </svg>}
+          {i===1&&<svg width="500" height="476">
+            <defs><pattern id="tool-dots" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="14" cy="14" r="1.1" fill="#CFDDD3"/></pattern></defs>
+            <rect width="500" height="476" fill="url(#tool-dots)"/>
+            <circle cx={O[0]} cy={O[1]} r={RADIUS} fill={`rgba(15,110,124,${.06*ring})`} stroke="#7A5BB5" strokeWidth="2.5" pathLength={1} strokeDasharray="1" strokeDashoffset={1-ring} transform={`rotate(-90 ${O[0]} ${O[1]})`}/>
+            {mids.map((m,n)=>{
+              // Each bisector runs from outside the triangle, through the edge midpoint, to O.
+              const dx=m[0]-O[0],dy=m[1]-O[1],len=Math.hypot(dx,dy),ox=m[0]+dx/len*46,oy=m[1]+dy/len*46,t=linear(f,212+n*5,232+n*5);
+              return <line key={n} x1={ox} y1={oy} x2={ox+(O[0]-ox)*t} y2={oy+(O[1]-oy)*t} stroke="#A7BFB1" strokeWidth="2" strokeDasharray="6 7"/>;
+            })}
+            <path d={`M${A} L${B} L${Cc}Z`} fill="none" stroke={C.teal} strokeWidth="4.5" strokeLinejoin="round" pathLength={1} strokeDasharray="1" strokeDashoffset={1-ease(f,20,74)}/>
+            {([[A,'A',14,-12],[B,'B',-34,14],[Cc,'C',16,14]] as const).map(([p,name,dx,dy])=><g key={name} opacity={linear(f,24,44)}><circle cx={p[0]} cy={p[1]} r="7.5" fill={C.teal}/><text x={p[0]+dx} y={p[1]+dy} fontSize="26" fill={C.ink}>{name}</text></g>)}
+            <g opacity={built}><circle cx={O[0]} cy={O[1]} r={6+3*built} fill={C.gold} stroke="#B98A2E" strokeWidth="2"/><text x={O[0]+16} y={O[1]+30} fontSize="21" fill="#8A6A22">圆心</text></g>
+            <text x="22" y="446" fontSize="20" fill="#5E7A70" opacity={ring}>三边中垂线交于一点，作出外接圆。</text>
+          </svg>}
+          {i===2&&<div style={{padding:'26px 28px',fontFamily:mono}}>
+            <div style={{fontSize:16,color:'#8FA6D6',marginBottom:20}}>derivative.py</div>
+            {code.map((line,n)=><div key={n} style={{fontSize:20.5,lineHeight:1.85,whiteSpace:'pre',color:n===0?'#B9C8FF':n===4?'#F2C48D':'#E2EAFB',opacity:linear(f,30+n*9,42+n*9)}}>
+              <span style={{display:'inline-block',width:34,color:'#52658F',fontSize:17}}>{n+1}</span>{line}
+            </div>)}
+            <div style={{display:'inline-block',marginTop:26,background:ran>0&&ran<1?'#2C8C80':C.teal,color:'#fff',padding:'9px 22px',borderRadius:7,fontSize:19,fontFamily:'inherit',
+              transform:`scale(${1-.06*span(f,248,258,4)})`,boxShadow:`0 0 0 ${focus[2]*4}px #0F6E7C55`}}>▷ 运行</div>
+            <div style={{borderTop:'1px solid #33456F',marginTop:24,paddingTop:18,opacity:ran,transform:`translateY(${(1-ran)*10}px)`}}>
+              <div style={{fontSize:15,color:'#8FA6D6',marginBottom:10}}>运行结果</div>
+              <div style={{fontSize:25,color:'#9FF0D0'}}>4.000000000026205</div>
+              <div style={{fontSize:17,color:'#7BC3A8',marginTop:12}}>✓ 运行完成 · 与 f′(2) = 4 一致</div>
+            </div>
+          </div>}
+        </div>
+        <div style={{position:'absolute',left:26,right:26,top:590}}>
+          <div style={{fontSize:29,fontWeight:700}}>{panel.title}</div>
+          <div style={{fontSize:20,lineHeight:1.7,color:'#5E7A70',marginTop:10}}>{panel.hint}</div>
+          <div style={{marginTop:22,height:4,borderRadius:2,background:'#E1EAE5'}}><div style={{width:`${on*100}%`,height:4,borderRadius:2,background:C.teal}}/></div>
+        </div>
+      </div>;
+    })}
+  </div>;
 };

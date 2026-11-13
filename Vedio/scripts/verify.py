@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[1]
-MOVIE = ROOT / 'output' / 'study-film-cinematic.mp4'
+MOVIE = ROOT / 'output' / 'study-film-v3.mp4'
 
 
 def main():

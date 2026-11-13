@@ -11,8 +11,8 @@
   "audio_codec": "aac",
   "audio_sample_rate": 48000,
   "decoded_audio_samples": 5760000,
-  "audio_peak": 0.7546,
-  "file_bytes": 44831684,
+  "audio_peak": 0.7538,
+  "file_bytes": 90174114,
   "browser_capture_errors": [],
   "sampled_seconds": [
     3.0,

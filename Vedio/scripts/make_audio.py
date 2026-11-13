@@ -108,7 +108,9 @@ def make_score(duration, scene_time=lambda seconds: seconds):
         # Gentle low pulse gives the edit momentum without masking narration.
         tone(start, 0.48, chord[0]-12, 0.055)
     rng = np.random.default_rng(271108)
-    for start in [7.5,13.5,21.5,27.5,32,44,54,66,77,87,96,104,108,111.5,115]:
+    # Soft swishes sit on the scene changes, the two light-up moments in the
+    # knowledge sky (94.7s, 99.6s) and the tool emphasis changes.
+    for start in [7.5,13.5,21.5,27.5,32,44,54,66,77,87,94.7,99.6,104,108.5,110.9,112.1,115]:
         n = int(RATE*0.34)
         noise = np.convolve(rng.normal(0,1,n), np.ones(32)/32, mode='same')
         noise *= np.sin(np.linspace(0,np.pi,n))**2 * 0.04
