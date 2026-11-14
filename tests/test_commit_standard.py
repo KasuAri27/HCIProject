@@ -1,6 +1,8 @@
 """提交规范与仓库布局检查脚本的单元测试。"""
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from scripts import check_commit_messages as commit_check
 from scripts import check_repo_layout as layout_check
@@ -50,6 +52,8 @@ class RepoLayoutTests(unittest.TestCase):
     def test_accepts_expected_layout(self):
         paths = [
             "README.md",
+            "AGENTS.md",
+            "CLAUDE.md",
             "requirements.txt",
             "requirements-dev.txt",
             "docs/TODO.md",
@@ -58,6 +62,16 @@ class RepoLayoutTests(unittest.TestCase):
             "library/.gitkeep",
         ]
         self.assertEqual(layout_check.find_violations(paths), [])
+
+    def test_agent_docs_must_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.assertEqual(len(layout_check.find_agent_doc_drift(root)), 1)  # 两份都缺失
+            (root / "AGENTS.md").write_bytes(b"a\r\nb\r\n")
+            (root / "CLAUDE.md").write_bytes(b"a\nb\n")
+            self.assertEqual(layout_check.find_agent_doc_drift(root), [])  # 仅换行符不同
+            (root / "CLAUDE.md").write_bytes(b"a\nc\n")
+            self.assertEqual(len(layout_check.find_agent_doc_drift(root)), 1)
 
     def test_rejects_root_docs_and_user_data(self):
         paths = [

@@ -1,7 +1,8 @@
 """检查仓库布局与本地数据是否被误提交。
 
 规则见 docs/CONTRIBUTING.md 与根目录 README：
-- 根目录文档只允许 README.md 和项目约束 AGENTS.md，其他文档放 docs/；
+- 根目录文档只允许 README.md、项目约束 AGENTS.md 与 CLAUDE.md，其他文档放 docs/；
+- AGENTS.md 与 CLAUDE.md 内容必须一致，避免两份约束漂移；
 - db/ 下的运行时数据、library/ 下的用户资料不进入 Git；
 - 根目录只保留启动配置与依赖清单，启动脚本在 launcher/ 下。
 
@@ -10,13 +11,14 @@
 
 import subprocess
 import sys
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 ROOT_ALLOWED = {
     ".gitattributes",
     ".gitignore",
     "README.md",
     "AGENTS.md",
+    "CLAUDE.md",
     "requirements.txt",
     "requirements-dev.txt",
     "requirements-browser.txt",
@@ -65,6 +67,20 @@ def find_violations(paths: list[str]) -> list[str]:
     return violations
 
 
+def find_agent_doc_drift(root: Path) -> list[str]:
+    """AGENTS.md 与 CLAUDE.md 必须同时存在且内容一致；换行符差异不算不一致。"""
+    texts = {}
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        path = root / name
+        if not path.is_file():
+            return [f"{name} 缺失；AGENTS.md 与 CLAUDE.md 必须同时存在并保持一致"]
+        # 工作区可能按平台换行符检出，比较前统一为 LF
+        texts[name] = path.read_bytes().replace(b"\r\n", b"\n")
+    if texts["AGENTS.md"] != texts["CLAUDE.md"]:
+        return ["AGENTS.md 与 CLAUDE.md 内容不一致；修改其中一个时须同步另一个"]
+    return []
+
+
 def _tracked_files() -> list[str]:
     result = subprocess.run(
         ["git", "-c", "core.quotepath=false", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
@@ -84,7 +100,7 @@ def main() -> int:
     except RuntimeError as exc:
         print(f"无法读取仓库文件列表：{exc}")
         return 1
-    violations = find_violations(paths)
+    violations = find_violations(paths) + find_agent_doc_drift(Path(__file__).resolve().parent.parent)
     if violations:
         print("仓库布局检查未通过：")
         for item in violations:
