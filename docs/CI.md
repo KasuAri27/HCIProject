@@ -111,4 +111,4 @@ python -m scripts.probe_ci_gates
 
 创建或更新 PR 前必须阅读[统一模板](../.github/pull_request_template.md)，按「内容 / 验证 / 注意」简短填写，后续 PR 统一遵守；示例见 [PR_EXAMPLE_CI.md](PR_EXAMPLE_CI.md)。
 
-`delete-merged-branch.yml` 在 PR 已合并时删除同仓库远端来源分支。它只运行可信默认分支脚本，不检出 PR 代码，不删除默认分支；若来源分支合并后已有新提交，工作流失败并保留分支，需先核对新工作。本地来源分支在切离后删除，不再保留已合并旧分支。
+`delete-merged-branch.yml` 在 PR 已合并时删除同仓库远端来源分支。它只运行可信默认分支脚本，不检出 PR 代码，不删除默认分支和 AGENTS.md 列出的长期活跃分支（`feat/home-page`、`feat/setting`、`feat/system`、`feat/tools`、`vedio`，调整时需同步工作流中的两处列表）；若来源分支合并后已有新提交，工作流失败并保留分支，需先核对新工作。本地来源分支在切离后删除，不再保留已合并旧分支。

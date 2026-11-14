@@ -13,7 +13,7 @@ jobs:
       github.event.pull_request.merged == true &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.head.ref != github.event.repository.default_branch &&
-      github.event.pull_request.head.ref != 'feat/home-page'
+      !contains(fromJSON('["feat/home-page","feat/setting","feat/system","feat/tools","vedio"]'), github.event.pull_request.head.ref)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -27,9 +27,10 @@ jobs:
             if (branch === context.payload.repository.default_branch || branch === 'main') {
               throw new Error('拒绝删除默认分支');
             }
-            // 主页是用户明确要求保留的长期分支，合并 PR 只同步内容。
-            if (branch === 'feat/home-page') {
-              core.info('保留长期主页分支：feat/home-page');
+            // 长期活跃分支（与 AGENTS.md 的活跃分支列表一致）合并 PR 后保留，只同步内容。
+            const longLived = ["feat/home-page", "feat/setting", "feat/system", "feat/tools", "vedio"];
+            if (longLived.includes(branch)) {
+              core.info(`保留长期分支：${branch}`);
               return;
             }
             const ref = `heads/${branch}`;
