@@ -66,6 +66,12 @@ def index():
     return render_template("index.html")
 
 
+@app.get("/sky")
+def sky_page():
+    # 知识星空页：首版只渲染前端内置的样例星空，不读取数据库，也没有图数据接口。
+    return render_template("sky.html")
+
+
 @app.get("/tools")
 def tools_page():
     return render_template("tools.html")

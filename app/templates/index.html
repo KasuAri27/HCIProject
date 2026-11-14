@@ -45,7 +45,7 @@
     </button><span>我的学习空间</span><button type="button" class="icon-btn" id="btn-sidebar-fold" aria-label="收起课程栏"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M8 3v14"/></svg></button></div>
       <nav class="workspace-nav" aria-label="学习导航">
         <button type="button" class="is-current" id="btn-courses"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h5l2 1 2-1h5v12h-5l-2 1-2-1H3zM10 5v12"/></svg>课程</button>
-        <button type="button" id="btn-knowledge-sky"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2 2 6 6 2-6 2-2 6-2-6-6-2 6-2zM3 2v3M1.5 3.5h3"/></svg>知识星空图</button>
+        <a id="btn-knowledge-sky" href="{{ url_for('sky_page') }}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m10 2 2 6 6 2-6 2-2 6-2-6-6-2 6-2zM3 2v3M1.5 3.5h3"/></svg>知识星空图</a>
         <a id="workspace-tools-link" href="{{ url_for('tools_page') }}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3v14h14M5 13c3 0 3-7 6-7s3 4 6 4"/></svg>学习工具</a>
       </nav>
       <div class="rail-head">
@@ -177,7 +177,6 @@
     <header><h2 id="course-dialog-title">创建课程</h2><button type="button" class="icon-btn" id="btn-course-cancel" aria-label="关闭创建课程">×</button></header>
     <form id="course-form"><label for="course-title">课程名称</label><input id="course-title" required maxlength="80" autocomplete="off" placeholder="例如：机器学习"><p class="workspace-form-error" id="course-form-error" role="alert" hidden></p><div class="workspace-form-actions"><button type="submit" class="btn btn-primary" id="btn-course-submit">创建课程</button></div></form>
   </dialog>
-  <dialog class="workspace-course-dialog" id="knowledge-dialog" aria-labelledby="knowledge-title"><header><h2 id="knowledge-title">知识星空图</h2><button type="button" class="icon-btn" id="btn-knowledge-close" aria-label="关闭知识星空图">×</button></header><p class="workspace-coming-soon">把课程、概念与资料连成星空。这个空间将在后续开放。</p></dialog>
 
   <dialog class="workspace-settings" id="workspace-settings" aria-labelledby="workspace-settings-title">
     <header class="workspace-settings-head">
