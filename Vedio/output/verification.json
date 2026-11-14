@@ -12,7 +12,7 @@
   "audio_sample_rate": 48000,
   "decoded_audio_samples": 5760000,
   "audio_peak": 0.7538,
-  "file_bytes": 90174114,
+  "file_bytes": 72413720,
   "browser_capture_errors": [],
   "sampled_seconds": [
     3.0,

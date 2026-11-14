@@ -29,7 +29,8 @@ try{
     }
   }else{
     let last=-1;
-    await renderMedia({...common,composition,codec:'h264',audioCodec:'aac',crf:18,pixelFormat:'yuv420p',concurrency:3,outputLocation:path.join(output,'study-film-v3.mp4'),onProgress:p=>{
+    // crf 21 keeps the file under GitHub's 100 MB limit; at 18 the detailed opening pushed it over.
+    await renderMedia({...common,composition,codec:'h264',audioCodec:'aac',crf:21,pixelFormat:'yuv420p',concurrency:3,outputLocation:path.join(output,'study-film-v3.mp4'),onProgress:p=>{
       const step=Math.floor(p.progress*20);if(step!==last){last=step;console.log(`Rendering ${step*5}% (${p.renderedFrames}/3600 frames)`);}
     }});
     console.log('Completed output/study-film-v3.mp4');
