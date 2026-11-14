@@ -1,0 +1,114 @@
+<section id="function-tool" aria-labelledby="function-tool-title">
+  <header class="function-tool-heading">
+    <h1 id="function-tool-title">函数工具</h1>
+  </header>
+  <div class="function-tool-layout">
+    <div class="function-tool-editor">
+      <form id="function-editor-form" class="function-tool-form">
+        <label for="function-expression">函数表达式</label>
+        <div class="function-tool-input">
+          <span aria-hidden="true">y =</span>
+          <input id="function-expression" type="text" placeholder="sin(x) + x²" maxlength="160" autocomplete="off" spellcheck="false">
+        </div>
+        <div id="function-keypad" class="function-tool-keypad" role="group" aria-label="数学符号">
+          <button type="button" data-insert="x">x</button>
+          <button type="button" data-insert="π">π</button>
+          <button type="button" data-insert="e">e</button>
+          <button type="button" data-insert="^2" aria-label="平方">x²</button>
+          <button type="button" data-wrap="^" aria-label="乘方">xⁿ</button>
+          <button type="button" data-wrap="sqrt" aria-label="平方根">√</button>
+          <button type="button" data-wrap="sin">sin</button>
+          <button type="button" data-wrap="cos">cos</button>
+          <button type="button" data-wrap="tan">tan</button>
+          <button type="button" data-wrap="ln">ln</button>
+          <button type="button" data-wrap="log">log</button>
+          <button type="button" data-wrap="abs" aria-label="绝对值">|x|</button>
+          <button type="button" data-wrap="asin">asin</button>
+          <button type="button" data-wrap="acos">acos</button>
+          <button type="button" data-wrap="atan">atan</button>
+          <button type="button" data-wrap="exp">exp</button>
+          <button type="button" data-wrap="" aria-label="括号">( )</button>
+          <button type="button" data-insert="÷">÷</button>
+          <button type="button" data-insert="1">1</button>
+          <button type="button" data-insert="2">2</button>
+          <button type="button" data-insert="3">3</button>
+          <button type="button" data-insert="4">4</button>
+          <button type="button" data-insert="5">5</button>
+          <button type="button" data-insert="×">×</button>
+          <button type="button" data-insert="6">6</button>
+          <button type="button" data-insert="7">7</button>
+          <button type="button" data-insert="8">8</button>
+          <button type="button" data-insert="9">9</button>
+          <button type="button" data-insert="0">0</button>
+          <button type="button" data-insert="−">−</button>
+          <button type="button" data-insert=".">.</button>
+          <button type="button" data-insert="+">+</button>
+        </div>
+        <p id="function-editor-error" class="function-tool-error" role="alert" hidden></p>
+        <div class="function-tool-actions">
+          <button type="submit" class="btn btn-primary" id="function-save">添加函数</button>
+          <button type="button" class="btn btn-quiet" id="function-new" hidden>新建函数</button>
+        </div>
+      </form>
+      <ul id="function-list" class="function-tool-series" aria-label="函数列表"></ul>
+    </div>
+
+    <div class="function-tool-analysis">
+      <div class="function-tool-graph">
+        <header>
+          <h3>函数图像</h3>
+          <form id="function-range-form" class="function-tool-range">
+            <fieldset>
+              <legend>x 范围</legend>
+              <input id="function-x-min" aria-label="x 最小值" value="-8" maxlength="32">
+              <span aria-hidden="true">至</span>
+              <input id="function-x-max" aria-label="x 最大值" value="8" maxlength="32">
+            </fieldset>
+            <fieldset>
+              <legend>y 范围</legend>
+              <input id="function-y-min" aria-label="y 最小值" value="-5" maxlength="32">
+              <span aria-hidden="true">至</span>
+              <input id="function-y-max" aria-label="y 最大值" value="5" maxlength="32">
+            </fieldset>
+            <button type="submit" class="btn btn-small">更新坐标</button>
+          </form>
+        </header>
+        <p id="function-range-error" class="function-tool-error" role="alert" hidden></p>
+        <svg id="function-plot" role="img" aria-label="函数坐标图"></svg>
+      </div>
+
+      <div class="function-tool-calculations">
+        <div class="function-tool-target">
+          <label for="function-target">计算函数</label>
+          <select id="function-target" disabled></select>
+        </div>
+        <div class="function-tool-calculation-grid">
+          <form id="function-integral-form" class="function-tool-form">
+            <h3>定积分</h3>
+            <div class="function-tool-fields">
+              <label>下限 <input id="function-integral-from" value="0" maxlength="32"></label>
+              <label>上限 <input id="function-integral-to" value="1" maxlength="32"></label>
+            </div>
+            <button type="submit" class="btn btn-small" disabled>计算积分</button>
+            <output id="function-integral-result" role="status" aria-live="polite"></output>
+          </form>
+          <form id="function-limit-form" class="function-tool-form">
+            <h3>极限</h3>
+            <div class="function-tool-fields">
+              <label>x → <input id="function-limit-point" value="0" placeholder="0 或 ∞" maxlength="32"></label>
+              <label>方向
+                <select id="function-limit-side">
+                  <option value="both">双侧</option>
+                  <option value="left">左侧</option>
+                  <option value="right">右侧</option>
+                </select>
+              </label>
+            </div>
+            <button type="submit" class="btn btn-small" disabled>计算极限</button>
+            <output id="function-limit-result" role="status" aria-live="polite"></output>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

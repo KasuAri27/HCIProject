@@ -1,0 +1,152 @@
+.tools-page { background: var(--panel); overflow: auto; }
+.tools-header { background: var(--page); border-bottom: 1px solid var(--rule-soft); }
+.tools-header-inner, .tools-content { width: min(1230px, calc(100% - 48px)); margin-inline: auto; }
+.tools-header-inner {
+  min-height: 59px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 25px;
+}
+.tools-brand { color: var(--ink); font-weight: 650; text-decoration: none; }
+.tools-header nav { display: flex; align-items: stretch; gap: 5px; }
+.tools-header nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 6px 11px;
+  border-radius: 7px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.tools-header nav a:hover { background: var(--panel-2); }
+.tools-header nav a[aria-current="page"] { background: var(--accent-wash); color: var(--accent-2); font-weight: 600; }
+.tools-content { padding-block: 26px 35px; }
+.function-tool-heading { margin: 0 0 17px; }
+.function-tool-heading h1 { margin: 0; font: 650 24px/1.3 var(--font-ui); }
+#function-tool :is(button, a, input, select):focus-visible, .tools-header a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#function-tool {
+  --function-grid: #e6edf0;
+  --function-axis: #8496a1;
+  --function-paper: #fbfdfd;
+}
+
+.function-tool-layout {
+  display: grid;
+  grid-template-columns: minmax(238px, 0.85fr) minmax(0, 1.7fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.function-tool-editor, .function-tool-analysis, .function-tool-form { display: grid; gap: 10px; min-width: 0; }
+.function-tool-editor, .function-tool-graph, .function-tool-calculations {
+  border: 1px solid var(--rule-soft);
+  border-radius: 10px;
+  background: var(--page);
+}
+.function-tool-editor, .function-tool-calculations { padding: 13px; }
+.function-tool-form label, .function-tool-target label, .function-tool-range legend {
+  color: var(--ink-2);
+  font: 600 12px var(--font-ui);
+}
+.function-tool-form h3, .function-tool-graph h3 { margin: 0; font: 600 14px var(--font-ui); }
+.function-tool-input {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 7px;
+  color: var(--accent-2);
+  font: 600 15px var(--font-mono);
+}
+#function-tool input, #function-tool select {
+  min-width: 0;
+  min-height: 33px;
+  padding: 5px 7px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--page);
+  color: var(--ink);
+  font: 13px var(--font-ui);
+}
+#function-tool input:focus, #function-tool select:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-wash);
+}
+#function-tool #function-expression { flex: 1; width: 100%; font: 14px var(--font-mono); }
+.function-tool-keypad { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.function-tool-keypad button, .function-tool-series button {
+  min-width: 0;
+  border: 1px solid var(--rule-soft);
+  border-radius: 5px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+.function-tool-keypad button { min-height: 30px; padding: 2px; font: 12px var(--font-mono); }
+.function-tool-keypad button:hover, .function-tool-series button:hover { background: var(--accent-wash); }
+.function-tool-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.function-tool-error { color: #aa3039; font: 12px/1.5 var(--font-ui); margin: 0; overflow-wrap: anywhere; }
+.function-tool-series { list-style: none; padding: 0; margin: 0; display: grid; gap: 5px; }
+.function-tool-series:empty { display: none; }
+.function-tool-series li { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 32px; gap: 4px; }
+.function-tool-series button { min-height: 33px; font: 12px var(--font-ui); }
+.function-tool-series button[aria-pressed] {
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 8px;
+  padding: 5px 7px;
+}
+.function-tool-series button[aria-pressed="true"] { background: var(--accent-wash); border-color: var(--accent); }
+.function-tool-series button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.function-tool-series i { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.function-tool-graph { overflow: hidden; }
+.function-tool-graph header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 13px; padding: 11px 13px; }
+.function-tool-range { display: flex; flex-wrap: wrap; align-items: end; gap: 6px 9px; }
+.function-tool-range fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
+.function-tool-range legend { padding: 0; margin-bottom: 3px; }
+.function-tool-range fieldset span { color: var(--ink-2); font-size: 11px; }
+#function-tool .function-tool-range input { width: 50px; min-height: 28px; }
+.function-tool-graph > .function-tool-error { padding: 0 13px 7px; }
+#function-plot {
+  width: 100%;
+  height: clamp(245px, 33vh, 380px);
+  display: block;
+  background: var(--function-paper);
+  border-top: 1px solid var(--rule-soft);
+}
+.function-plot-grid { stroke: var(--function-grid); }
+.function-plot-axis { stroke: var(--function-axis); }
+#function-plot text { fill: var(--ink-2); font: 11px var(--font-ui); }
+.function-tool-target { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; }
+#function-tool #function-target { flex: 1 1 120px; width: 0; }
+.function-tool-calculation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.function-tool-calculation-grid form { align-content: start; padding: 10px; border-radius: 7px; background: var(--panel); }
+.function-tool-calculation-grid .btn { justify-self: start; }
+.function-tool-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.function-tool-fields label { display: grid; gap: 3px; min-width: 0; }
+.function-tool-fields :is(input, select) { width: 100%; }
+.function-tool-calculation-grid output {
+  color: var(--accent-2);
+  font: 13px/1.45 var(--font-ui);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.function-tool-calculation-grid output[data-error="true"] { color: #aa3039; }
+
+@media (max-width: 760px) {
+  .function-tool-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 620px) {
+  .tools-header-inner, .tools-content { width: calc(100% - 28px); }
+  .tools-header-inner { gap: 3px 12px; }
+  .tools-content { padding-top: 18px; }
+  .function-tool-calculation-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (pointer: coarse) {
+  .function-tool-keypad button { min-height: 39px; }
+}

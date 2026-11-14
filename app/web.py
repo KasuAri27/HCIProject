@@ -66,6 +66,11 @@ def index():
     return render_template("index.html")
 
 
+@app.get("/tools")
+def tools_page():
+    return render_template("tools.html")
+
+
 @app.route("/user")
 def page_user():
     return redirect(url_for("index", panel="user"))
