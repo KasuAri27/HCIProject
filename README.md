@@ -38,4 +38,4 @@ Windows 也可以双击 `launcher/start.bat`；需要原生桌面窗口时运行
 - DOCX/PPTX 转 PDF 依赖 Windows 与本机 Microsoft Office（Word/PowerPoint）；PDF 播放模式暂不记录滚动位置，也不能划选标注。
 - 扫描 PDF 的 OCR 需要系统安装 Tesseract，并准备中文语言包（默认 `chi_sim+eng`，可用 `LEARN_OCR_LANG` 调整）。缺少引擎时页面会显示明确提示，文本型 PDF 不受影响。
 - PPTX 图表数据、嵌入公式和动画暂不解析；旧版本不提供切换阅读界面。
-- 开发前先阅读根目录的项目约束 [AGENTS.md](AGENTS.md)；其他文档统一放在 `docs/` 下，根目录文档只保留本 README 和 AGENTS.md。
+- 开发前先阅读根目录的项目约束 [AGENTS.md](AGENTS.md)；其他文档统一放在 `docs/` 下，根目录文档只保留本 README、AGENTS.md 和 CLAUDE.md；后两者内容保持一致，改一个必须同步另一个。
