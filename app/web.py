@@ -72,6 +72,11 @@ def sky_page():
     return render_template("sky.html")
 
 
+@app.get("/tools")
+def tools_page():
+    return render_template("tools.html")
+
+
 @app.route("/user")
 def page_user():
     return redirect(url_for("index", panel="user"))

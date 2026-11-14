@@ -24,6 +24,15 @@
 - `main` 已开启分支保护：改动通过 PR 合并，PR 必须通过 `checks` 与 `commit-messages` 两个检查。
 - 推送前先同步远程：`git pull --rebase origin main`；不要对 `main` 使用 force push。
 
+### 工作树约定
+
+- 仓库根目录固定检出 `main`，只用于同步、合并与发布检查，不在其中开发功能。
+- 每个活跃分支（见 [AGENTS.md](../AGENTS.md)）各用一个工作树，放在仓库内的 `.claude/worktrees/`，目录名取分支名并把 `/` 换成 `-`，如 `feat/tools` 对应 `.claude/worktrees/feat-tools`。该目录与仓库同盘，由本地 `.git/info/exclude` 忽略，新克隆需自行添加。
+- 创建：`git worktree add .claude/worktrees/feat-tools feat/tools`；同一分支只能在一个工作树检出。
+- 离开工作树前先提交，`git status` 应干净；不在分离头状态做长期工作。
+- 一次性验证用的工作树用完即删：`git worktree remove <路径>`，再 `git worktree prune`；删除前 shell 的当前目录不能在其中。
+- 用 `git worktree list` 定期巡检，清理已合并分支和长期无提交、无变更的工作树。
+
 ## 2. 提交前检查
 
 在提交前至少运行（测试依赖见 `requirements-dev.txt`）：

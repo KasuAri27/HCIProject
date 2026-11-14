@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>学习工具 · 学习助手</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='function-tool.css') }}">
+</head>
+<body class="tools-page">
+  <header class="tools-header">
+    <div class="tools-header-inner">
+      <a class="tools-brand" href="{{ url_for('index') }}">学习助手</a>
+      <nav aria-label="学习导航">
+        <a href="{{ url_for('index') }}">工作台</a>
+        <a href="{{ url_for('tools_page') }}" aria-current="page">学习工具</a>
+      </nav>
+    </div>
+  </header>
+  <main class="tools-content">
+    {% include "_function_tool.html" %}
+  </main>
+  <script src="{{ url_for('static', filename='function-tool.js') }}"></script>
+</body>
+</html>
